@@ -93,6 +93,6 @@ AntDev <- genDevTool(factorA,ant)
 
 BeeDevOGG <- ogg2$OGG[ogg2$gene_Amel %in% BeeDev]
 AntDevOGG <- ogg2$OGG[ogg2$gene_Mphar %in% AntDev]
-
+TwoSpecDev = BeeDevOGG[BeeDevOGG %in% AntDevOGG]
 
 
