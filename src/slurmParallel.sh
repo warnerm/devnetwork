@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -p computing
+#SBATCH -p compute
 #SBATCH -N 1 # number of nodes
 #SBATCH -n 1 # number of cores
 #SBATCH --array=1-5
