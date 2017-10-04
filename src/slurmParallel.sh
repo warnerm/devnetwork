@@ -6,7 +6,7 @@
 #SBATCH -t 0-24:00 # time (D-HH:MM)
 #SBATCH -o slurm.%N.%j.out # STDOUT
 #SBATCH -e slurm.%N.%j.err # STDERR
-#SBATCH --mem-per-cpu=4GB
+#SBATCH --mem-per-cpu=100MB
 #SBATCH --mail-type=END,FAIL # notifications for job done & fail
 #SBATCH --mail-user=warnerm@sas.upenn.edu # send-to addressfor i in {1..100000}; do
 Rscript src/analysis_parallelTests.R
