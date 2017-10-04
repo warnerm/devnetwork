@@ -1,13 +1,70 @@
 ---
 title: "Determining TPM cutoff from spike-ins"
-output: html_notebook
+output:
+  html_document: default
+  html_notebook: default
+  pdf_document: default
 ---
 
 
 ```{r}
-plot(cars)
+library(reshape2)
+library(dplyr)
+options(stringsAsFactors = FALSE)
+ercc92 <- melt(read.table("../data/spike_in_conc.txt", header = T), variable.name = "mix", value.name = "conc") %>%
+  left_join(read.table("../data/spike_in.txt", header = T), by = "mix")
+ercc92$library <- gsub("-", ".", ercc92$library)
+
+
+bees <- ercc92 %>% inner_join(melt(read.table("../data/bees.tpm.txt", header = T), variable.name = "library", value.name = "tpm"), by = c("id", "library"))
+
+ants <- ercc92 %>% inner_join(melt(read.table("../data/ants.tpm.txt", header = T), variable.name = "library", value.name = "tpm"), by = c("id", "library"))
+
+
 ```
 
-Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+QC Plots of spike-ins
 
-When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file).
+We looking at a distance matrix created by observed/expected ERCC values. We _do not_ want them to cluster by developmental stage.
+
+```{r}
+
+myDist <- function(dat) {
+  a <- dist(dat)
+  rownames(a) <- names(dat)
+  return(a)
+}
+
+ants %>% mutate(obsExp = tpm/conc) %>% acast(library~id, value.var = "obsExp") %>% dist %>% hclust %>% plot
+
+bees %>% mutate(obsExp = tpm/conc) %>% acast(library~id, value.var = "obsExp") %>% dist %>% hclust %>% plot
+```
+
+The samples don't cluster by developmental stage, which is good.
+```{r}
+epsilon <- 10^-8 #stand in for zero tpm
+
+fmt <- function(){
+    f <- function(x) as.character(round(x,2))
+    f
+}
+
+
+r2 <- function(dat) {
+  rSquared <- c()
+  cutoffs <- seq(0,1,by=.05)
+  for (cutoff in  cutoffs)
+    rSquared <- c(rSquared,
+                  summary(lm(log(tpm + epsilon)~log(conc)+library, 
+                     dat %>% filter(tpm > cutoff )))$adj.r.squared)
+  return(rSquared)
+}
+
+r2(ants) %>% plot
+r2(bees) %>% plot
+
+ggplot(ants,aes(conc,tpm+epsilon,color=library, alpha=.1))+geom_point(size=3)+scale_x_continuous(labels = fmt(),trans="log2")+scale_y_continuous(labels = fmt(),trans="log2")+theme_bw()+xlab("Spike-in concentration")+ylab("Spike-in TPM")+geom_line(stat="smooth", method="lm",se=FALSE, alpha=.2)+guides(colour=FALSE)+ggtitle("Ants")
+
+ggplot(bees,aes(conc,tpm+epsilon,color=library, alpha=.1))+geom_point(size=3)+scale_x_continuous(labels = fmt(),trans="log2")+scale_y_continuous(labels = fmt(),trans="log2")+theme_bw()+xlab("Spike-in concentration")+ylab("Spike-in TPM")+geom_line(stat="smooth", method="lm",se=FALSE, alpha=.2)+guides(colour=FALSE)+ggtitle("Bees")
+
+```
