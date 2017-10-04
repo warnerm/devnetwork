@@ -1,3 +1,4 @@
+library(edgeR)
 EdgeR <- function(data,design,coef){
   ####Inital steps of standard edgeR analysis
   data <- DGEList(counts=data)

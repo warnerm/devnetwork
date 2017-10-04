@@ -161,7 +161,7 @@ calcOverlap <- function(AllTest){
 }
 
 #Function to parallelize
-runBoots <- function(run){
+runBoots <- function(antF,beeF,antC,beeC,test){
   while (TRUE){ 
     x <- try(bootOverlap(antF,beeF,antC,beeC,test)) ##Protects from annoying errors that happen with resampling
     if (!inherits(x,"try-error")){
