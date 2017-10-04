@@ -120,3 +120,7 @@ tissueSocial <- function(factors,data,tissue,scramble=FALSE){
 }
 
 save(tissueSocial,tissueCaste,ant,bee,factorA,factorB,DevList,tissues,EdgeR,file="initialvariables.RData")
+results <- matrix(nrow=1,ncol=9)
+colnames(results) = apply(expand.grid(tissues,c("bee","ant","overlap")), 1, paste, collapse=".")
+write.csv(results,file="casteBoot.csv")
+write.csv(results,file="socialBoot.csv")
