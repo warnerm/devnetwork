@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash#
 #SBATCH -p compute
 #SBATCH -N 1 # number of nodes
 #SBATCH -n 1 # number of cores
