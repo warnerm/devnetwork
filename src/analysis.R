@@ -223,7 +223,26 @@ runBoots <- function(antF,beeF,antC,beeC,test,nBoot){
   return(results[-c(1),])
 }
 
-bootCaste <- runBoots(factorA,factorB,ant,bee,"caste",50)
+#parallel wrapper function for bootstrapping DE analysis
+parallelBoots <- function(){
+  nReps = floor(boots/bootsPerCore)
+  
+  # Initiate cluster; this only works on linux
+  cl <- makePSOCKcluster(40,
+                         master=system("hostname -i", intern=TRUE))
+  
+  clusterExport(cl = cl, c(
+    "name","nGene","input","runGenie","bootsPerCore")) ##Must export these variables for parLapply to see them
+  
+  # In parallel, go through all permutations
+  p <- parLapply(cl,1:nReps, function(k) {
+    runGenie(k)
+  })
+  stopCluster(cl)
+  return()
+}
+
+bootCaste <- runBoots(factorA,factorB,ant,bee,"caste",3)
 bootSocial <- runBoots(factorA,factorB,ant,bee,"social",50)
 
 
@@ -263,7 +282,7 @@ for (i in 1:3){
                     table[(j-1)*3+k,i]-table[(j-1)*3+k,i+3]),
                   c(table[7,i] - table[(j-1)*3+k,i+3],
                     nGene[[i]] - table[7,i] - table[(j-1)*3+k,i] + table[(j-1)*3+k,i+3]))
-      table[(j-1)*3+k,i+6] = fisher.test(chi,alternative="greater")$p.value
+      table[(j-1)*3+k,i+6] = signif(fisher.test(chi,alternative="greater")$p.value,digits=3)
     }
   }
 }
@@ -273,8 +292,9 @@ colnames(table) <- c("Amel","Mpharaonis","TwoSpecies","Amel_Devel",
                      "Mpharaonis_Devel","TwoSpecies_Devel",
                      "Amel_chiP","Mpharaonis_chiP","TwoSpecies_chiP")
 
-png("~/GitHub/devnetwork/results/OverlapTable.png")
-grid.table()
+png("~/GitHub/devnetwork/results/OverlapTable.png",width=4000,height=1000,res=300)
+grid.table(table)
+dev.off()
 
 write.table(table,file="~/GitHub/devnetwork/results/OverlapTable.txt",row.names=TRUE)
             
