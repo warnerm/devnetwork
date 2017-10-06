@@ -47,7 +47,7 @@ runBoot <- function(antF,beeF,antC,beeC,test){
   }
 }
 
-runBoot(factorA,factorB,ant,bee,"caste",20)
-runBoot(factorA,factorB,ant,bee,"social",20)
+runBoot(factorA,factorB,ant,bee,"caste")
+runBoot(factorA,factorB,ant,bee,"social")
 
 
