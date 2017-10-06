@@ -2,4 +2,4 @@
 from subprocess import call
 
 for x in range(1000):
-	call("sbatch","Rscript","src/slurmParallel.sh")
+	call(["sbatch","src/slurmParallel.sh"])
