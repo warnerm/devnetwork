@@ -119,7 +119,7 @@ tissueSocial <- function(factors,data,tissue,scramble=FALSE){
   return(rownames(out)[out$FDR < 0.05])
 }
 
-save(tissueSocial,tissueCaste,ant,bee,factorA,factorB,DevList,tissues,EdgeR,file="initialvariables.RData")
+save(tissueSocial,tissueCaste,ant,bee,factorA,factorB,DevList,tissues,EdgeR,ogg2,file="initialvariables.RData")
 results <- matrix(nrow=1,ncol=9)
 colnames(results) = apply(expand.grid(tissues,c("bee","ant","overlap")), 1, paste, collapse=".")
 write.csv(results,file="casteBoot.csv")
