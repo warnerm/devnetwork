@@ -9,7 +9,7 @@ def InOut(argv):
 	inputfile=''
 	outputfile = ''
 	try:
-	        opts, args = getopt.getopt(argv,"hi:o:s:",["ifile=","sfile="])
+	        opts, args = getopt.getopt(argv,"hi:o:s:",["ifile=","ofile=","sfile="])
 	except getopt.GetoptError:
 	        print 'FastaHeaderOGG.py -i <inputfile> -o <outputfile> -s <seqfile>'
 	        sys.exit(2)
@@ -18,7 +18,7 @@ def InOut(argv):
 	                inputfile = arg
 	        elif opt in ("-o","--ofile"):
 	                outputfile = arg   
-	        elif opt in ("-s","--ofile"):
+	        elif opt in ("-s","--sfile"):
 	                seqfile = arg                    
 	return inputfile,outputfile,seqfile
 
