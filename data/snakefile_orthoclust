@@ -1,0 +1,16 @@
+#Takes in tpm values for m pharaonis and a mellifera as well as orthology information
+#And makes a two-species network
+
+SPECIES = ["bee","ant"]
+
+rule all:
+	input: expand("{species}.net.txt",species=SPECIES)
+
+#Create individual networks
+#This python script creates networks based on pearson correlations, in which
+#each gene is connected to the top d genes by pearson correlation, 
+#where d is chosen so that the network makes one giant graph
+rule IndividualNetworks:
+	input: "{species}.tpm.txt"
+	output: "{species}.net.txt"
+	shell: "python2.7 ../src/IndivNet.py -i {input} -o {output}"
