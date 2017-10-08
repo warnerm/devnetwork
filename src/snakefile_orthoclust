@@ -13,4 +13,4 @@ rule all:
 rule IndividualNetworks:
 	input: "{species}.tpm.txt"
 	output: "{species}.net.txt"
-	shell: "../src/IndivNet.py -i {input} -o {output}"
+	shell: "python2.7 ../src/IndivNet.py -i {input} -o {output}"
