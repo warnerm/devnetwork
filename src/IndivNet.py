@@ -4,6 +4,7 @@ from compiler.ast import nodes
 
 import pandas as pd
 import sys, getopt
+import numpy as np
 
 
 def InOut(argv):
@@ -65,7 +66,7 @@ def main(argv):
     df = df.drop(df.columns[[0]],axis=1)
     sums = df.sum(axis=1)
     df = df[sums > 0]
-    dfCor = df.T.corr()
+    dfCor = np.corrcoef(np.array(df))
     d = 1 #variable specifying number of genes each gene is connected to
     while True:
         net = MakeNetwork(dfCor.abs(),d)
