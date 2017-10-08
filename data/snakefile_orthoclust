@@ -1,7 +1,7 @@
 #Takes in tpm values for m pharaonis and a mellifera as well as orthology information
 #And makes a two-species network
 
-SPECIES = ["bee","ant"]
+SPECIES = ["bees","ants"]
 
 rule all:
 	input: expand("{species}.net.txt",species=SPECIES)
