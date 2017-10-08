@@ -67,6 +67,7 @@ def main(argv):
     sums = df.sum(axis=1)
     df = df[sums > 0]
     dfCor = np.corrcoef(np.array(df))
+    dfCor = pd.DataFrame(dfCor)
     d = 1 #variable specifying number of genes each gene is connected to
     while True:
         net = MakeNetwork(dfCor.abs(),d)
