@@ -12,6 +12,13 @@ EdgeR <- function(data,design,coef){
   return(out)
 }
 
+filterLowly <- function(counts,cut){ #filter out based on counts per million reads
+  libs = colSums(counts)/1000000
+  cpm = counts/libs
+  keep = rowSums(cpm > 1) >= ncol(counts)/2
+  return(counts[keep,])
+}
+
 genFactor <- function(counts){
   factors <- data.frame(sample=colnames(counts))
   factors$stage = 8
@@ -56,6 +63,9 @@ rownames(ant) = ant$gene
 bee = bee[!grepl("ERCC",bee$gene),-c(1)]
 ant = ant[!grepl("ERCC",ant$gene),-c(1)]
 
+#Filter out lowly expressed genes
+ant <- filterLowly(ant,1)
+bee <- filterLowly(bee,1)
 
 ogg2 <- read.csv("~/GitHub/devnetwork/data/HymOGG_hym.csv",sep=" ")
 ogg3 <- read.csv("~/GitHub/devnetwork/data/ThreeWayOGGMap.csv",header=TRUE)
