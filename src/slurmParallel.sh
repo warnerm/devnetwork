@@ -1,3 +1,3 @@
 #!/bin/bash#
 #SBATCH -p compute # partition (queue)
-Rscript src/analysis_parallelTests.R
+python2.7 ../src/IndivNet.py -i bees.tpm.txt -o bees.net.txt
