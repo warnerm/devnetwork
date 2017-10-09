@@ -54,6 +54,28 @@ genFactor <- function(counts){
   return(factors)
 }
 
+
+casteDev <- function(caste,data,factors){
+  counts <- data[,(factors$tissue=="larva"|factors$tissue=="egg") & factors$caste==caste]
+  design <- model.matrix(~stage+colony,data=droplevels(factors[factors$sample %in% colnames(counts),]))
+  out <- EdgeR(counts,design,2:6)
+  return(rownames(out)[out$FDR < fdr])
+}
+
+genDevTool <- function(factors,data){
+  fQueen <- factors[factors$stage==1|factors$stage==2,]
+  fQueen$caste="queen"
+  fQueen$sample=paste(fQueen$sample,"_QueenCopy",sep="")
+  rownames(fQueen)=fQueen$sample
+  factors <- rbind(factors,fQueen) #Add copies of egg and L1 samples for dev toolkit definition
+  dataQ <- data[,grepl("L1|_E",colnames(data))]
+  colnames(dataQ)=paste(colnames(dataQ),"_QueenCopy",sep="")
+  data <- cbind(data,dataQ)#Add copies of egg and L1 samples for dev toolkit definition
+  QGenes <- casteDev("queen",data,factors)
+  WGenes <- casteDev("worker",data,factors)
+  return(QGenes[QGenes %in% WGenes]) #return genes that are differentially expressed across stages in queens and workers
+}
+
 tissues <- c("head","gaster","mesosoma")
 
 bee <- read.table("~/GitHub/devnetwork/data/bees.counts_edit.txt",header=TRUE)
@@ -73,39 +95,28 @@ ogg3 <- read.csv("~/GitHub/devnetwork/data/ThreeWayOGGMap.csv",header=TRUE)
 factorB <- genFactor(bee)
 factorA <- genFactor(ant)
 
-casteDev <- function(caste,data,factors){
-  counts <- data[,(factors$tissue=="larva"|factors$tissue=="egg") & factors$caste==caste]
-  design <- model.matrix(~stage+colony,data=droplevels(factors[factors$sample %in% colnames(counts),]))
-  out <- EdgeR(counts,design,2:6)
-  return(rownames(out)[out$FDR < 0.05])
+DevWorkflow <- function(fdr){
+  
+  BeeDev <- genDevTool(factorB,bee)
+  AntDev <- genDevTool(factorA,ant)
+  
+  BeeDevOGG <- ogg2$OGG[ogg2$gene_Amel %in% BeeDev]
+  AntDevOGG <- ogg2$OGG[ogg2$gene_Mphar %in% AntDev]
+  TwoSpecDev = BeeDevOGG[BeeDevOGG %in% AntDevOGG]
+  
+  DevList <- list(BeeDev,AntDev,TwoSpecDev)
+  
+  save(tissueSocial,tissueCaste,ant,bee,factorA,factorB,DevList,tissues,EdgeR,ogg2,file=paste("initialvariables",fdr,".RData",sep=""))
+  results <- matrix(nrow=1,ncol=9)
+  colnames(results) = apply(expand.grid(tissues,c("bee","ant","overlap")), 1, paste, collapse=".")
+  write.csv(results,file=paste("casteBoot",fdr,".csv",sep=""))
+  write.csv(results,file=paste("socialBoot",fdr,".csv",sep=""))
+  return(0)
 }
 
-genDevTool <- function(factors,data){
-  fQueen <- factors[factors$stage==1|factors$stage==2,]
-  fQueen$caste="queen"
-  fQueen$sample=paste(fQueen$sample,"_QueenCopy",sep="")
-  rownames(fQueen)=fQueen$sample
-  factors <- rbind(factors,fQueen) #Add copies of egg and L1 samples for dev toolkit definition
-  dataQ <- data[,grepl("L1|_E",colnames(data))]
-  colnames(dataQ)=paste(colnames(dataQ),"_QueenCopy",sep="")
-  data <- cbind(data,dataQ)#Add copies of egg and L1 samples for dev toolkit definition
-  QGenes <- casteDev("queen",data,factors)
-  WGenes <- casteDev("worker",data,factors)
-  return(QGenes[QGenes %in% WGenes]) #return genes that are differentially expressed across stages in queens and workers
-}
-
-BeeDev <- genDevTool(factorB,bee)
-AntDev <- genDevTool(factorA,ant)
-
-BeeDevOGG <- ogg2$OGG[ogg2$gene_Amel %in% BeeDev]
-AntDevOGG <- ogg2$OGG[ogg2$gene_Mphar %in% AntDev]
-TwoSpecDev = BeeDevOGG[BeeDevOGG %in% AntDevOGG]
-
-DevList <- list(BeeDev,AntDev,TwoSpecDev)
-
-
-##Caste Toolkit
-tissueCaste <- function(factors,data,tissue,scramble=FALSE){
+##########
+##Caste toolkit
+tissueCaste <- function(fdr,factors,data,tissue,fdr,scramble=FALSE){
   counts <- data[,factors$stage==8&factors$tissue==tissue&factors$caste!="male"]
   f = droplevels(factors[factors$sample %in% colnames(counts),])
   if (scramble){ #mix up caste labels
@@ -113,12 +124,12 @@ tissueCaste <- function(factors,data,tissue,scramble=FALSE){
   }
   design <- model.matrix(~caste+colony,data=f)
   out <- EdgeR(counts,design,2)
-  return(rownames(out)[out$FDR < 0.05])
+  return(rownames(out)[out$FDR < fdr])
 }
 
 #############
 ##Social toolkit
-tissueSocial <- function(factors,data,tissue,scramble=FALSE){
+tissueSocial <- function(fdr,factors,data,tissue,fdr,scramble=FALSE){
   counts <- data[,factors$stage==8&factors$tissue==tissue&factors$caste=="worker"]
   f = droplevels(factors[factors$sample %in% colnames(counts),])
   if (scramble){ #mix up caste labels
@@ -126,11 +137,9 @@ tissueSocial <- function(factors,data,tissue,scramble=FALSE){
   }
   design <- model.matrix(~NF+colony,data=f)
   out <- EdgeR(counts,design,2)
-  return(rownames(out)[out$FDR < 0.05])
+  return(rownames(out)[out$FDR < fdr])
 }
 
-save(tissueSocial,tissueCaste,ant,bee,factorA,factorB,DevList,tissues,EdgeR,ogg2,file="initialvariables.RData")
-results <- matrix(nrow=1,ncol=9)
-colnames(results) = apply(expand.grid(tissues,c("bee","ant","overlap")), 1, paste, collapse=".")
-write.csv(results,file="casteBoot.csv")
-write.csv(results,file="socialBoot.csv")
+DevWorkflow(0.05)
+DevWorkflow(0.1)
+DevWorkflow(0.3)
