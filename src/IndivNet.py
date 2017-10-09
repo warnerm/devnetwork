@@ -59,18 +59,10 @@ def MakeNetwork(dfCor,d):
 
 def main(argv):
     inputfile, outputfile = InOut(argv)
-    df = pd.read_table(inputfile, sep="\t")
-    filter = df[df.columns[0]].str.contains("ERCC")
-    df = df[~filter]
-    genes = df[df.columns[0]]
-    df = df.drop(df.columns[[0]],axis=1)
-    sums = df.sum(axis=1)
-    df = df[sums > 0]
-    dfCor = np.corrcoef(np.array(df))
-    dfCor = pd.DataFrame(dfCor)
+    df = pd.read_csv(inputfile, sep="\t")
     d = 1 #variable specifying number of genes each gene is connected to
     while True:
-        net = MakeNetwork(dfCor.abs(),d)
+        net = MakeNetwork(df.abs(),d)
         if (GiantGraph(net)):
             break
         else:
