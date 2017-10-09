@@ -1,4 +1,8 @@
 library(edgeR)
+library(grid)
+library(gridExtra)
+library(reshape2)
+library(ggplot2)
 EdgeR <- function(data,design,coef){
   ####Inital steps of standard edgeR analysis
   data <- DGEList(counts=data)
@@ -117,8 +121,8 @@ workflow <- function(fdr){
   TwoSpecCaste <- list()
   
   for (tissue in tissues){
-    beeCaste[[tissue]]=tissueCaste(fdr,factorB,bee_filt,tissue)
-    antCaste[[tissue]]=tissueCaste(fdr,factorA,ant_filt,tissue)
+    beeCaste[[tissue]]=tissueCaste(factorB,bee,tissue,fdr)
+    antCaste[[tissue]]=tissueCaste(factorA,ant,tissue,fdr)
     beeOGG <- ogg2$OGG[ogg2$gene_Amel %in% beeCaste[[tissue]]]
     antOGG <- ogg2$OGG[ogg2$gene_Mphar %in% antCaste[[tissue]]]
     TwoSpecCaste[[tissue]] <- beeOGG[beeOGG %in% antOGG]
@@ -131,8 +135,8 @@ workflow <- function(fdr){
   TwoSpecNF <- list()
   
   for (tissue in tissues){
-    beeNF[[tissue]]=tissueSocial(fdr,factorB,bee,tissue)
-    antNF[[tissue]]=tissueSocial(fdr,factorA,ant,tissue)
+    beeNF[[tissue]]=tissueSocial(factorB,bee,tissue,fdr)
+    antNF[[tissue]]=tissueSocial(factorA,ant,tissue,fdr)
     beeOGG <- ogg2$OGG[ogg2$gene_Amel %in% beeNF[[tissue]]]
     antOGG <- ogg2$OGG[ogg2$gene_Mphar %in% antNF[[tissue]]]
     TwoSpecNF[[tissue]] <- beeOGG[beeOGG %in% antOGG]
@@ -194,6 +198,33 @@ workflow <- function(fdr){
   return(list(test_list,DevList))
 }
 
+
+##########
+##Caste toolkit
+tissueCaste <- function(factors,data,tissue,fdr,scramble=FALSE){
+  counts <- data[,factors$stage==8&factors$tissue==tissue&factors$caste!="male"]
+  f = droplevels(factors[factors$sample %in% colnames(counts),])
+  if (scramble){ #mix up caste labels
+    f$caste = sample(f$caste,length(f$caste),replace=F)
+  }
+  design <- model.matrix(~caste+colony,data=f)
+  out <- EdgeR(counts,design,2)
+  return(rownames(out)[out$FDR < fdr])
+}
+
+#############
+##Social toolkit
+tissueSocial <- function(factors,data,tissue,fdr,scramble=FALSE){
+  counts <- data[,factors$stage==8&factors$tissue==tissue&factors$caste=="worker"]
+  f = droplevels(factors[factors$sample %in% colnames(counts),])
+  if (scramble){ #mix up caste labels
+    f$NF = sample(f$NF,length(f$NF),replace=F)
+  }
+  design <- model.matrix(~NF+colony,data=f)
+  out <- EdgeR(counts,design,2)
+  return(rownames(out)[out$FDR < fdr])
+}
+
 #constants
 tissues <- c("head","gaster","mesosoma")
 
@@ -209,6 +240,52 @@ fdr_0.1 <- workflow(0.1)
 fdr_0.3 <- workflow(0.3)
 
 ############
-##
+##Loading bootstrapped results
+###########
+casteBoot <- read.csv("~/GitHub/devnetwork/data/data.processed/casteBoot.csv")
+socialBoot <- read.csv("~/GitHub/devnetwork/data/data.processed/socialBoot.csv")
+
+dfBoot <- function(test,fdr,bootRes,trueRes){
+  bootRes <- bootRes[-c(1),-c(1)]
+  res <- data.frame(type=rep("bee",9),trueDE=rep(length(trueRes[[1]][["head"]]),9),
+                    bootDE=NA,
+                    bootC95=NA,
+                    bootC99=NA)
+  res$type = colnames(bootRes)
+  for (i in 1:9){
+    res$bootDE[i] = round(mean(bootRes[,i],na.rm=TRUE),3)
+    res$bootC95[i] = round(quantile(bootRes[,i],0.95,na.rm=TRUE),3)
+    res$bootC99[i] = round(quantile(bootRes[,i],0.99,na.rm=TRUE),3)
+  }
+  for (i in 1:3){
+    for (j in 1:3){
+      res$trueDE[(i-1)*3+j] = length(trueRes[[i]][[tissues[[j]]]])
+    }
+  }
+  return(res)
+}
+
+caste0.05 <- dfBoot("caste",0.05,casteBoot,fdr_0.05[[1]][[1]])
+rownames(caste0.05)=caste0.05$type
+plotDf <- melt(caste0.05,id.vars=c("type","bootC95","bootC99"))
+plotDf$bootC95[plotDf$variable=="trueDE"]=NA
+plotDf$bootC99[plotDf$variable=="trueDE"]=NA
+ggplot(plotDf,aes(x=type,y=value,fill=variable))+
+  geom_bar(stat="identity",position=position_dodge())+
+  geom_errorbar(aes(ymax=bootC99,ymin=value),position=position_dodge())
+
+caste0.05=caste0.05[,-c(1)]
+png("~/GitHub/devnetwork/results/OverlapTableBootCaste.png",width=2000,height=1000,res=300)
+grid.table(caste0.05)
+dev.off()
+
+
+caste0.05 <- dfBoot("caste",0.05,socialBoot,fdr_0.05[[1]][[1]])
+rownames(caste0.05)=caste0.05$type
+caste0.05=caste0.05[,-c(1)]
+png("~/GitHub/devnetwork/results/OverlapTableBootSocial.png",width=2000,height=1000,res=300)
+grid.table(caste0.05)
+dev.off()
+
 
 

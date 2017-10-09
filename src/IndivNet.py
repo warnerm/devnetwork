@@ -59,7 +59,7 @@ def MakeNetwork(dfCor,d):
 
 def main(argv):
     inputfile, outputfile = InOut(argv)
-    df = pd.read_csv(inputfile, sep="\t")
+    df = pd.read_csv(inputfile)
     d = 1 #variable specifying number of genes each gene is connected to
     while True:
         net = MakeNetwork(df.abs(),d)
@@ -68,7 +68,7 @@ def main(argv):
         else:
             d = d+1
 
-    net.to_table(outputfile,sep="\t",index=None)
+    net.to_csv(outputfile,sep="\t",index=None)
 
 if __name__ == "__main__":
     main(sys.argv[1:])
