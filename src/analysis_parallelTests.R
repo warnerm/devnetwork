@@ -48,15 +48,15 @@ runBoot <- function(antF,beeF,antC,beeC,test,fdr){
   }
 }
 
-load(paste("initialvariables",0.05,".RData"))
+load(paste("initialvariables",0.05,".RData",sep=""))
 runBoot(factorA,factorB,ant,bee,"caste",0.05)
 runBoot(factorA,factorB,ant,bee,"social",0.05)
 
-load(paste("initialvariables",0.1,".RData"))
+load(paste("initialvariables",0.1,".RData",sep=""))
 runBoot(factorA,factorB,ant,bee,"caste",0.1)
 runBoot(factorA,factorB,ant,bee,"social",0.1)
 
-load(paste("initialvariables",0.3,".RData"))
+load(paste("initialvariables",0.3,".RData",sep=""))
 runBoot(factorA,factorB,ant,bee,"caste",0.3)
 runBoot(factorA,factorB,ant,bee,"social",0.3)
 
