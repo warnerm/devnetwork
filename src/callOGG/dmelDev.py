@@ -34,7 +34,7 @@ def main(argv):
     df2 = df.merge(dmel,on="Gene")
     df3 = df2.merge(ogg,left_on="Entry_y",right_on="gene_Dmel_FLYBASE")
     DevOGG = np.unique(np.array(df3['OGG']))
-    np.savetxt(outputfile,DevOGG)
+    np.savetxt(outputfile,DevOGG,fmt='%5s',delimiter=',')
 
 if __name__ == "__main__":
     main(sys.argv[1:])

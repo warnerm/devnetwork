@@ -14,7 +14,7 @@ GFF = {"Mphar":"Mphar.gff","Amel":"Amel.gff"}
 ODB = {"hym":"ODB8_EukOGs_genes_Hymenoptera-7399.txt","hol":"ODB8_EukOGs_genes_Endopterygota-33392.txt"}
 
 rule all:
-	input: "ThreeWayOGGMap.csv","HymOGG_hym.csv"
+	input: "ThreeWayOGGMap.csv","HymOGG_hym.csv", "DmelDevelOGG.txt"
 
 #Make database containing all protein sequences for the given OGG level (properly labeled with ortholog name)
 rule makeProtDB:
