@@ -93,7 +93,7 @@ rule DmelMap:
 	output: "map_Dmel"
 	shell: """grep "Drosophila melanogaster" {input} | awk '{{ $1=""; $4=""; $5=""; $6=""; print}}' | sed 's/^ //' | sed 's/    / /'  | sed 's/ /\t/' | sed 's/ /\t/' > {output}"""
 
-#Create mphar/Amel one-one OGGmaps
+##Create mphar/Amel one-one OGGmaps
 rule hymOGG:
 	input: Amel="gene_OGG_Amel_{db}.csv",Mphar="gene_OGG_Mphar_{db}.csv"
 	output: "HymOGG_{db}.csv"
@@ -104,4 +104,12 @@ rule threeMap:
 	input: "HymOGG_hol.csv","map_Dmel"
 	output: "ThreeWayOGGMap.csv"
 	shell: """python2.7 {SRC}/ThreeWayMap.py -i {input[0]} -j {input[1]} -o {output}"""
+
+#From UniprotKB drosophila developmental proteins, create list of OGGs that are developmental proteins
+rule dmelDevel: 
+	input: "UniprotKB_dmel.txt","ThreeWayOGGMap.csv","Dmel.gff"
+	output: "DmelDevelOGG.txt"
+	shell: """grep "FBpp" {input[2]} | sed 's/.*Dbxref=FLYBASE://' | sed 's/,GeneID.*gene=/\t/' | sed 's/;.*//' | uniq > DmelMap.txt ;\
+		python2.7 dmelDev.py -i {input[0]} -m "DmelMap.txt" -s {input[1]} -o {output}"""
+
 
