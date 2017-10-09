@@ -39,10 +39,10 @@ runBoot <- function(antF,beeF,antC,beeC,test,fdr){
   while (TRUE){ 
     x <- try(bootOverlap(antF,beeF,antC,beeC,test,fdr)) ##Protects from annoying errors that happen with resampling
     if (!inherits(x,"try-error")){
-      df <- read.csv(paste(test,"Boot",fdr,sep=""))
+      df <- read.csv(paste(test,"Boot",fdr,".csv",sep=""))
       df = df[,-c(1)]
       df <- rbind(df,x)
-      write.csv(df,file=paste(test,"Boot.csv",fdr,sep=""))
+      write.csv(df,file=paste(test,"Boot",fdr,".csv",sep=""))
       return(0)
     } 
   }
