@@ -116,7 +116,7 @@ DevWorkflow <- function(fdr){
 
 ##########
 ##Caste toolkit
-tissueCaste <- function(fdr,factors,data,tissue,fdr,scramble=FALSE){
+tissueCaste <- function(factors,data,tissue,fdr,scramble=FALSE){
   counts <- data[,factors$stage==8&factors$tissue==tissue&factors$caste!="male"]
   f = droplevels(factors[factors$sample %in% colnames(counts),])
   if (scramble){ #mix up caste labels
@@ -129,7 +129,7 @@ tissueCaste <- function(fdr,factors,data,tissue,fdr,scramble=FALSE){
 
 #############
 ##Social toolkit
-tissueSocial <- function(fdr,factors,data,tissue,fdr,scramble=FALSE){
+tissueSocial <- function(factors,data,tissue,fdr,scramble=FALSE){
   counts <- data[,factors$stage==8&factors$tissue==tissue&factors$caste=="worker"]
   f = droplevels(factors[factors$sample %in% colnames(counts),])
   if (scramble){ #mix up caste labels
