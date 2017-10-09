@@ -100,32 +100,6 @@ genDevTool <- function(fdr,factors,data){
   return(QGenes[QGenes %in% WGenes]) #return genes that are differentially expressed across stages in queens and workers
 }
 
-##########
-##Caste toolkit
-tissueCaste <- function(fdr,factors,data,tissue,scramble=FALSE){
-  counts <- data[,factors$stage==8&factors$tissue==tissue&factors$caste!="male"]
-  f = droplevels(factors[factors$sample %in% colnames(counts),])
-  if (scramble){ #mix up caste labels
-    f$caste = sample(f$caste,length(f$caste),replace=F)
-  }
-  design <- model.matrix(~caste+colony,data=f)
-  out <- EdgeR(counts,design,2)
-  return(rownames(out)[out$FDR < fdr])
-}
-
-#############
-##Social toolkit
-tissueSocial <- function(fdr,factors,data,tissue,scramble=FALSE){
-  counts <- data[,factors$stage==8&factors$tissue==tissue&factors$caste=="worker"]
-  f = droplevels(factors[factors$sample %in% colnames(counts),])
-  if (scramble){ #mix up caste labels
-    f$NF = sample(f$NF,length(f$NF),replace=F)
-  }
-  design <- model.matrix(~NF+colony,data=f)
-  out <- EdgeR(counts,design,2)
-  return(rownames(out)[out$FDR < fdr])
-}
-
 ##Entire workflow with different fdr values
 workflow <- function(fdr){
   BeeDev <- genDevTool(fdr,factorB,bee)
@@ -212,7 +186,7 @@ workflow <- function(fdr){
                        "Mpharaonis_Devel","TwoSpecies_Devel",
                        "Amel_fisherP","Mpharaonis_fisherP","TwoSpecies_fisherP")
   
-  png(paste("~/GitHub/devnetwork/results/OverlapTable","fdr",".png",sep=""),width=4000,height=1000,res=300)
+  png(paste("~/GitHub/devnetwork/results/OverlapTable",fdr,"fdr",".png",sep=""),width=4000,height=1000,res=300)
   grid.table(table)
   dev.off()
   
@@ -234,5 +208,7 @@ fdr_0.05 <- workflow(0.05)
 fdr_0.1 <- workflow(0.1)
 fdr_0.3 <- workflow(0.3)
 
+############
+##
 
 

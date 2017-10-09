@@ -55,14 +55,14 @@ genFactor <- function(counts){
 }
 
 
-casteDev <- function(caste,data,factors){
+casteDev <- function(caste,data,factors,fdr){
   counts <- data[,(factors$tissue=="larva"|factors$tissue=="egg") & factors$caste==caste]
   design <- model.matrix(~stage+colony,data=droplevels(factors[factors$sample %in% colnames(counts),]))
   out <- EdgeR(counts,design,2:6)
   return(rownames(out)[out$FDR < fdr])
 }
 
-genDevTool <- function(factors,data){
+genDevTool <- function(factors,data,fdr){
   fQueen <- factors[factors$stage==1|factors$stage==2,]
   fQueen$caste="queen"
   fQueen$sample=paste(fQueen$sample,"_QueenCopy",sep="")
@@ -71,8 +71,8 @@ genDevTool <- function(factors,data){
   dataQ <- data[,grepl("L1|_E",colnames(data))]
   colnames(dataQ)=paste(colnames(dataQ),"_QueenCopy",sep="")
   data <- cbind(data,dataQ)#Add copies of egg and L1 samples for dev toolkit definition
-  QGenes <- casteDev("queen",data,factors)
-  WGenes <- casteDev("worker",data,factors)
+  QGenes <- casteDev("queen",data,factors,fdr)
+  WGenes <- casteDev("worker",data,factors,fdr)
   return(QGenes[QGenes %in% WGenes]) #return genes that are differentially expressed across stages in queens and workers
 }
 
@@ -97,8 +97,8 @@ factorA <- genFactor(ant)
 
 DevWorkflow <- function(fdr){
   
-  BeeDev <- genDevTool(factorB,bee)
-  AntDev <- genDevTool(factorA,ant)
+  BeeDev <- genDevTool(factorB,bee,fdr)
+  AntDev <- genDevTool(factorA,ant,fdr)
   
   BeeDevOGG <- ogg2$OGG[ogg2$gene_Amel %in% BeeDev]
   AntDevOGG <- ogg2$OGG[ogg2$gene_Mphar %in% AntDev]
