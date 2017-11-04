@@ -515,3 +515,83 @@ tbls <- lapply(tbl,tableGrob)
 png("~/GitHub/devnetwork/results/overTables.png",height=1500,width=4000,res=300)
 grid.arrange(tbls[[1]],tbls[[2]])
 dev.off()
+
+##############
+##Comparing to genes defined as developmental toolkit in D. melanogaster
+#############
+dmel <- read.table("~/GitHub/devnetwork/data/DmelDevelOGG.txt")
+oggDev = droplevels(ogg3[ogg3$OGG %in% dmel$V1,])
+t = table(oggDev$OGG)
+t = t[t==1]
+oggDevF = oggDev[oggDev$OGG %in% names(t),] #Filter for 1-1-1 orthologs (developmental genes)
+
+t = table(ogg3$OGG)
+t = t[t==1]
+ogg111 = ogg3[ogg3$OGG %in% names(t),] #Filter for 1-1-1 orthologs (all genes)
+ogg111 = ogg111[ogg111$gene_Mphar %in% rownames(antDev[[1]]) &
+                  ogg111$gene_Amel %in% rownames(beeDev[[1]]),] #Filter for oggs in the analysis
+
+
+beeDW = rownames(beeDev[[1]])[beeDev[[1]]$FDR < 0.05]
+antDW = rownames(antDev[[1]])[antDev[[1]]$FDR < 0.05]
+beeDQ = rownames(beeDev[[2]])[beeDev[[2]]$FDR < 0.05]
+antDQ = rownames(antDev[[2]])[antDev[[2]]$FDR < 0.05]
+
+beeD = beeDW[beeDW %in% beeDQ]
+antD = antDW[antDW %in% antDQ]
+
+beeD_ogg = ogg111$OGG[ogg111$gene_Amel %in% beeD]
+antD_ogg = ogg111$OGG[ogg111$gene_Mphar %in% antD]
+DevOGG = beeD_ogg[beeD_ogg %in% antD_ogg]
+
+MasterDev = DevOGG[DevOGG %in% oggDevF$OGG] #OGGs identified as dev toolkit by transcriptomic and Dmel annotation
+
+a = rbind(c(length(MasterDev),nrow(oggDevF) - length(MasterDev)),
+          c(length(DevOGG) - length(MasterDev),
+            nrow(ogg111) - nrow(oggDevF) - length(DevOGG) + length(MasterDev)))
+
+fisher.test(a,alternative="greater") #They is less association than expected
+oggDevF[oggDevF$OGG %in% MasterDev,]
+
+##############
+##Are social and caste toolkits enriched for developmental genes, as defined in Dmel?
+##############
+getOGG <- function(list, column){
+  gene = rownames(list)[list$FDR < 0.05]
+  oggC = ogg111$OGG[ogg111[,column] %in% gene]
+  return(oggC)
+}
+
+checkOver <- function(oggC,numC){
+  MasterOGG = oggDevF$OGG[oggDevF$OGG %in% oggC]
+  a = rbind(c(length(MasterOGG),nrow(oggDevF) - length(MasterOGG)),
+            c(length(oggC) - length(MasterOGG),
+              nrow(ogg111) - nrow(oggDevF) - length(oggC) + length(MasterOGG)))
+  r = fisher.test(a,alternative="greater")
+  return(c(length(oggC),length(MasterOGG),r$p.value))
+}
+
+res = list(list(list()))
+tests = c("caste","social")
+bigL = list(casteList,socList)
+names(bigL) = tests
+cols = c(2,3)
+names(cols) = c("ant","bee")
+
+for (test in tests){
+  for (spec in c("bee","ant")){
+    for (tissue in tissues){
+      oggC = getOGG(bigL[[test]][[spec]][[tissue]],cols[spec])
+      res[[test]][[spec]][[tissue]]=checkOver(oggC)
+    }  
+  }
+}
+
+
+
+
+
+
+
+
+
