@@ -57,14 +57,18 @@ genFactor <- function(counts){
   return(factors)
 }
 
+#Take text file and get data frame we want for analysis
+modifyDF <- function(data){
+  rownames(data)=data$id
+  return(data[!grepl("ERCC",rownames(data)),-c(1)])
+}
+
 tissues <- c("head","gaster","mesosoma")
 
 bee <- read.table("~/GitHub/devnetwork/data/bees.counts_edit.txt",header=TRUE)
 ant <- read.table("~/GitHub/devnetwork/data/ants.counts_edit.txt",header=TRUE)
-rownames(bee) = bee$gene
-rownames(ant) = ant$gene
-bee = bee[!grepl("ERCC",bee$gene),-c(1)]
-ant = ant[!grepl("ERCC",ant$gene),-c(1)]
+bee = modifyDF(bee)
+ant = modifyDF(ant)
 
 #Filter out lowly expressed genes
 ant <- filterLowly(ant,1)
@@ -590,6 +594,47 @@ for (test in tests){
 ###################
 ###New section: comparing developmental timecourses
 ###################
+beeT <- read.table("~/GitHub/devnetwork/data/bees.tpm.txt",header=TRUE)
+antT <- read.table("~/GitHub/devnetwork/data/ants.tpm.txt",header=TRUE)
+beeT <- modifyDF(beeT)
+antT <- modifyDF(antT)
+
+t = table(ogg2$OGG)
+t = t[t==1]
+ogg11 = ogg2[ogg2$OGG %in% names(t),]
+
+#We want to get expression data labeled by OGG (1-1 bee-ant)
+oggExpr <- function(d,col){
+  keep = ncol(d)
+  d$gene = rownames(d)
+  d = merge(d,ogg11,by.x="gene",by.y=col)
+  rownames(d) = d$OGG
+  return(d[,2:(keep+2)])
+}
+
+beeTO <- oggExpr(beeT,"gene_Amel")
+antTO <- oggExpr(antT,"gene_Mphar")
+
+#############
+##Principle component analysis
+#############
+allF <- rbind(factorB,factorA)
+allF$species = "bee"
+allF$species[grepl("Ant",allF$sample)]="ant"
+allT = merge(beeTO,antTO,by="OGG")
+rownames(allT) = allT$OGG
+allT = allT[,-c(1)]
+topGene = rownames(allT)[rowSums(allT) > quantile(rowSums(allT,0.9))]
+
+pc <- prcomp(t(log(allT+1)))
+data = as.data.frame(pc$x)
+data = cbind(data,allF)
+data$stage_tissue = do.call(paste, c(allF[,c("stage","tissue")],list(sep='-')))
+ggplot(data,aes(x=PC3,y=PC4,color=species,shape=stage))+
+  geom_point()
+  
+
+
 #Filter out 1st and 2nd stage (egg/1st instar) and make a new variable including stage and tissue
 filterFactor <- function(f){
   f = f[f$stage!=1&f$stage!=2,] #We'll treat eggs and 1st instar larvae separately since there is no caste
@@ -618,8 +663,9 @@ corStage <- function(df1,df2,f1,f2){
   return(corMat)
 }
 
-beeQW = corStage(bee[,factorB$caste=='queen'],bee[,factorB$caste=='worker'],factorB[factorB$caste=='queen',],factorB[factorB$caste=='worker',])
 
 
+
+beeQW = corStage(beeT[,factorB$caste=='queen'],beeT[,factorB$caste=='worker'],factorB[factorB$caste=='queen',],factorB[factorB$caste=='worker',])
 
 
