@@ -587,10 +587,38 @@ for (test in tests){
   }
 }
 
+###################
+###New section: comparing developmental timecourses
+###################
+#Filter out 1st and 2nd stage (egg/1st instar) and make a new variable including stage and tissue
+filterFactor <- function(f){
+  f = f[f$stage!=1&f$stage!=2,] #We'll treat eggs and 1st instar larvae separately since there is no caste
+  f$stage_tissue = do.call(paste, c(f[,c("stage","tissue")],list(sep='-')))
+  f$stage_tissue = as.factor(f$stage_tissue)
+  return(f)
+}
 
+#subset data by stage
+subData <- function(df,f,lev){
+  return(df[colnames(df) %in% f$sample[f$stage_tissue==levels(f$stage_tissue)[lev]]])
+}
 
+#calculate correlation matrix across stages for two separate dataframes
+corStage <- function(df1,df2,f1,f2){
+  f1 = filterFactor(f1)
+  f2 = filterFactor(f2)
+  corMat <- matrix(nrow=8,ncol=8)
+  for (i in 1:8){
+    for (j in 1:8){
+      d1 = subData(df1,f1,i)
+      d2 = subData(df2,f2,j)
+      corMat[i,j] = cor((rowSums(d1)/ncol(d1)),(rowSums(d2)/ncol(d2)))
+    }
+  }
+  return(corMat)
+}
 
-
+beeQW = corStage(bee[,factorB$caste=='queen'],bee[,factorB$caste=='worker'],factorB[factorB$caste=='queen',],factorB[factorB$caste=='worker',])
 
 
 
