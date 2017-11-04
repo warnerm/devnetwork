@@ -7,10 +7,9 @@ EdgeR <- function(data,design,coef){
   ####Inital steps of standard edgeR analysis
   data <- DGEList(counts=data)
   data <- calcNormFactors(data)
-  dat <- estimateGLMTrendedDisp(data, design)
-  dat <- estimateGLMTagwiseDisp(dat, design)
-  fit <- glmFit(dat,design)
-  diff <- glmLRT(fit, coef=coef) 
+  dat <- estimateDisp(data,design)
+  fit <- glmQLFit(dat,design)
+  diff <- glmQLFTest(fit, coef=coef) 
   ###Calculate FDR
   out <- topTags(diff,n=Inf,adjust.method="BH")$table
   return(out)
@@ -85,8 +84,9 @@ write.csv(factorA,"~/GitHub/devnetwork/data/factors_ants.csv")
 ###Devel toolkit
 casteDev <- function(fdr,caste,data,factors){
   counts <- data[,(factors$tissue=="larva"|factors$tissue=="egg") & factors$caste==caste]
-  design <- model.matrix(~stage+colony,data=droplevels(factors[factors$sample %in% colnames(counts),]))
-  out <- EdgeR(counts,design,2:6)
+  f = droplevels(factors[factors$sample %in% colnames(counts),])
+  design <- model.matrix(~stage+colony,data=f)
+  out <- EdgeR(counts,design,2:length(levels(f$stage)))
   return(rownames(out)[out$FDR < fdr])
 }
 
@@ -280,12 +280,238 @@ grid.table(caste0.05)
 dev.off()
 
 
-caste0.05 <- dfBoot("caste",0.05,socialBoot,fdr_0.05[[1]][[1]])
+caste0.05 <- dfBoot("caste",0.05,socialBoot,fdr_0.05[[1]][[2]])
 rownames(caste0.05)=caste0.05$type
 caste0.05=caste0.05[,-c(1)]
 png("~/GitHub/devnetwork/results/OverlapTableBootSocial.png",width=2000,height=1000,res=300)
 grid.table(caste0.05)
 dev.off()
 
+###########
+##Trying analysis by looking at correlation of F values between Dev toolkit and caste/social toolkit
+##########
+EdgeR <- function(data,design,coef){
+  ####Inital steps of standard edgeR analysis
+  data <- DGEList(counts=data)
+  data <- calcNormFactors(data)
+  dat <- estimateGLMTrendedDisp(data, design)
+  dat <- estimateGLMTagwiseDisp(dat, design)
+  fit <- glmFit(dat,design)
+  diff <- glmLRT(fit, coef=coef) 
+  ###Calculate FDR
+  out <- topTags(diff,n=Inf,adjust.method="BH")$table
+  return(out)
+}
 
 
+casteDev <- function(caste,data,factors){
+  counts <- data[,(factors$tissue=="larva"|factors$tissue=="egg") & factors$caste==caste]
+  f = droplevels(factors[factors$sample %in% colnames(counts),])
+  design <- model.matrix(~stage+colony,data=f)
+  out <- EdgeR(counts,design,2:length(levels(f$stage)))
+  return(out)
+}
+
+genDevTool <- function(factors,data){
+  fQueen <- factors[factors$stage==1|factors$stage==2,]
+  fQueen$caste="queen"
+  fQueen$sample=paste(fQueen$sample,"_QueenCopy",sep="")
+  rownames(fQueen)=fQueen$sample
+  factors <- rbind(factors,fQueen) #Add copies of egg and L1 samples for dev toolkit definition
+  dataQ <- data[,grepl("L1|_E",colnames(data))]
+  colnames(dataQ)=paste(colnames(dataQ),"_QueenCopy",sep="")
+  data <- cbind(data,dataQ)#Add copies of egg and L1 samples for dev toolkit definition
+  worker <- casteDev("worker",data,factors)
+  queen <- casteDev("queen",data,factors)
+  return(list(worker,queen))
+}
+
+getOGG <- function(out,merge.col){
+  out$gene = rownames(out)
+  out <- merge(out,sharedOGG,by.x="gene",by.y=merge.col)
+  return(out)
+} 
+
+sharedOGG <- ogg2[ogg2$gene_Mphar %in% rownames(ant) & ogg2$gene_Amel %in% rownames(bee),]
+#remove duplicates
+sharedOGG$num=1
+for (i in 1:nrow(sharedOGG)){
+  num = nrow(sharedOGG[sharedOGG$OGG==sharedOGG$OGG[i],])
+  sharedOGG$num[i] = num
+}
+sharedOGG <- sharedOGG[sharedOGG$num==1,]
+
+beeDev <- genDevTool(factorB,bee)
+antDev <- genDevTool(factorA,ant)
+beeDev_OGG <- lapply(beeDev,getOGG,merge.col="gene_Amel")
+antDev_OGG <- lapply(antDev,getOGG,merge.col="gene_Mphar")
+Dev_OGG <- c(beeDev_OGG,antDev_OGG)
+
+venn = matrix(nrow=nrow(beeDev_OGG[[1]]),ncol=4)
+Fmat = matrix(nrow=nrow(beeDev_OGG[[1]]),ncol=4)
+for (i in 1:4){
+  for (j in 1:nrow(sharedOGG)){
+    row = Dev_OGG[[i]][Dev_OGG[[i]]$OGG %in% sharedOGG$OGG[j],]
+    Fmat[j,i] = row$LR
+    if (row$FDR < 0.05){
+      venn[j,i] = 1
+    } else {
+      venn[j,i] = 0
+    }
+  }
+}
+
+x <- vennCounts(venn)
+png("~/GitHub/devnetwork/results/devVenn.png")
+vennDiagram(x,names=c("beeW","beeQ","antW","antQ"),main="Overlap of developmental DE genes")
+dev.off()
+
+corMat = matrix(nrow=4,ncol=4)
+colnames(corMat) = rownames(corMat) = c("beeW","beeQ","antW","antQ")
+for (i in 1:4){
+  for (j in 1:4){
+    corMat[i,j] = round(cor(Fmat[,i],Fmat[,j]),3)
+  }
+}
+mytheme <- gridExtra::ttheme_default(
+  core = list(padding=unit(c(1, 1), "mm"))
+)
+t <- tableGrob(corMat,theme=mytheme)
+png("~/GitHub/devnetwork/results/devCor.png")
+grid.arrange(t,top=textGrob("pearson correlation of LR for each gene
+            where LR is testing the affect of stage on expression.
+            (i.e. whether or not a gene changes expression across pre-pupal development)
+            P <<< 0.001 in all cases",vjust=3))
+dev.off()
+
+bVenn <- matrix(data=0,nrow=nrow(venn),ncol=2)
+bVenn[,1][venn[,1]+venn[,2]==2]=1
+bVenn[,2][venn[,3]+venn[,4]==2]=1
+x <- vennCounts(bVenn)
+
+chisq.test(rbind(c(x[3,3],x[2,3]),c(x[1,3],x[0,3])))
+png("~/GitHub/devnetwork/results/devVenn2.png")
+vennDiagram(x,names=c("Amel Dev","Mphar Dev"))
+dev.off()
+
+##########
+##Caste toolkit
+tissueCaste <- function(factors,data,tissue,scramble=FALSE){
+  counts <- data[,factors$stage==8&factors$tissue==tissue&factors$caste!="male"]
+  f = droplevels(factors[factors$sample %in% colnames(counts),])
+  if (scramble){ #mix up caste labels
+    f$caste = sample(f$caste,length(f$caste),replace=F)
+  }
+  design <- model.matrix(~caste+colony,data=f)
+  out <- EdgeR(counts,design,2)
+  return(out)
+}
+
+#############
+##Social toolkit
+tissueSocial <- function(factors,data,tissue,scramble=FALSE){
+  counts <- data[,factors$stage==8&factors$tissue==tissue&factors$caste=="worker"]
+  f = droplevels(factors[factors$sample %in% colnames(counts),])
+  if (scramble){ #mix up caste labels
+    f$NF = sample(f$NF,length(f$NF),replace=F)
+  }
+  design <- model.matrix(~NF+colony,data=f)
+  out <- EdgeR(counts,design,2)
+  return(out)
+}
+
+casteList <- list(list())
+socList <- list(list())
+for (tissue in tissues){
+  casteList[["bee"]][[tissue]]=tissueCaste(factorB,bee,tissue)
+  socList[["bee"]][[tissue]]=tissueSocial(factorB,bee,tissue)
+  casteList[["ant"]][[tissue]]=tissueCaste(factorA,ant,tissue)
+  socList[["ant"]][[tissue]]=tissueSocial(factorA,ant,tissue)
+}
+
+numDEframe <- function(list){
+  beeOGG <- lapply(list[["bee"]],getOGG,merge.col="gene_Amel")
+  antOGG <- lapply(list[["ant"]],getOGG,merge.col="gene_Mphar")
+  fr = matrix(nrow=3,ncol=3)
+  corMat = matrix(nrow=3,ncol=4)
+  for (i in 1:3){
+    over = merge(beeOGG[[tissues[i]]],antOGG[[tissues[i]]],by="OGG")
+    fr[i,1]=sum(beeOGG[[tissues[i]]]$FDR < 0.05)
+    fr[i,2]=sum(antOGG[[tissues[i]]]$FDR < 0.05)
+    fr[i,3]=sum(over$FDR.x < 0.05 & over$FDR.y < 0.05)
+    mat = cor.test(over$logFC.x,over$logFC.y)
+    corMat[i,1] = signif(mat$estimate,4)
+    corMat[i,2] = signif(mat$p.value,4)
+    mat = cor.test(abs(over$logFC.x),abs(over$logFC.y))
+    corMat[i,3] = signif(mat$estimate,4)
+    corMat[i,4] = signif(mat$p.value,4)
+  }
+  rownames(fr)= rownames(corMat) = tissues
+  colnames(fr) = c("bee","ant","overlap")
+  colnames(corMat) = c("R","pVal","R_abs","pVal_abs")
+  return(list(fr,corMat))
+}
+
+cDE <- numDEframe(casteList)
+sDE <- numDEframe(socList)
+
+res = c(cDE,sDE)
+l = lapply(res,tableGrob)
+png("~/GitHub/devnetwork/results/casteTables.png",height=1000,width=3000,res=300)
+grid.arrange(l[[1]],l[[3]],l[[2]],l[[4]])
+dev.off()
+
+devGenes <- function(dev){
+  dev2 <- merge(dev[[1]],dev[[2]],by="OGG")
+  return(dev2$OGG[dev2$FDR.x < 0.05 & dev2$FDR.y < 0.05])
+}
+
+devLR <- function(dev){
+  dev2 <- merge(dev[[1]],dev[[2]],by="OGG")
+  dev2$meanLR = (dev2$LR.x+dev2$LR.y)/2
+  return(dev2)
+}
+dev = list(beeDev_OGG,antDev_OGG)
+devGene <- lapply(dev,devGenes)
+devLRlist <- lapply(dev,devLR)
+
+numDEoverlap <- function(list,test){
+  beeOGG <- lapply(list[["bee"]],getOGG,merge.col="gene_Amel")
+  antOGG <- lapply(list[["ant"]],getOGG,merge.col="gene_Mphar")
+  nDE <- matrix(nrow=3,ncol=9)
+  corMat <- matrix(nrow=3,ncol=4)
+  for (i in 1:3){
+    beeG = beeOGG[[tissues[i]]][beeOGG[[tissues[i]]]$FDR < 0.05,]
+    antG = antOGG[[tissues[i]]][antOGG[[tissues[i]]]$FDR < 0.05,]
+    overG = beeG$OGG[beeG$OGG %in% antG$OGG]
+    nDE[i,1] = length(devGene[[1]])
+    nDE[i,2] = nrow(beeG)
+    nDE[i,3] = sum(beeG$OGG %in% devGene[[1]])
+    nDE[i,4] = length(devGene[[2]])
+    nDE[i,5] = nrow(antG)
+    nDE[i,6] = sum(antG$OGG %in% devGene[[2]])
+    nDE[i,7] = sum(devGene[[1]] %in% devGene[[2]])
+    nDE[i,8] = length(overG)
+    nDE[i,9] = sum(overG %in% devGene[[1]][devGene[[1]] %in% devGene[[2]]])
+    mat = cor.test(devLRlist[[1]]$meanLR,beeOGG[[tissues[i]]]$LR)
+    corMat[i,1] = signif(mat$estimate,4)
+    corMat[i,2] = signif(mat$p.value,4)
+    mat = cor.test(devLRlist[[2]]$meanLR,antOGG[[tissues[i]]]$LR)
+    corMat[i,3] = signif(mat$estimate,4)
+    corMat[i,4] = signif(mat$p.value,4)
+  }
+  rownames(nDE) = rownames(corMat) = tissues
+  colnames(nDE) =  apply(expand.grid(c("devel",test,paste("devel_",test,sep="")),c("bee","ant","overlap")), 1, paste, collapse=".")
+  colnames(corMat) = c("bee_R","bee_pval","ant_R","ant_pval")
+  return(list(nDE,corMat))
+}
+
+cOver <- numDEoverlap(casteList,"caste")
+sOver <- numDEoverlap(socList,"social")
+
+tbl = list(cOver[[1]],sOver[[1]])
+tbls <- lapply(tbl,tableGrob)
+
+png("~/GitHub/devnetwork/results/overTables.png",height=1500,width=4000,res=300)
+grid.arrange(tbls[[1]],tbls[[2]])
+dev.off()
