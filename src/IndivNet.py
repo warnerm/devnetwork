@@ -1,4 +1,10 @@
-#!/usr/local/bin/python2.7
+#!/usr/bin/python
+
+#SBATCH -p compute # partition (queue)
+#SBATCH --export=ALL
+#SBATCH -t 10-00:00
+#SBATCH -n 40
+
 #File takes in tpm values and constructs a network based on pearson correlations among genes
 #Finds a value for d, the threshold of pearson correlations, so that all genes are in a giant graph
 from compiler.ast import nodes
@@ -65,12 +71,9 @@ def MakeNetwork(dfCor,d):
     return results
 
 def main(argv):
-    #inputfile, outputfile = InOut(argv)
-    inputfile = "~/Github/devnetwork/data/bees.tpm.txt"
-    outputfile = "~/Data/devnetwork/bees_oneNet.txt"
+    inputfile, outputfile = InOut(argv)
     df = pd.read_table(inputfile)
     df = df.drop(df.columns[0],axis=1) #Drop gene column
-    df = df.iloc[:100]
     df = hypsine(df)
     pearson = df.transpose().corr(method='pearson')
     pearson = pearson.abs()
