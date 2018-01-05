@@ -3,7 +3,12 @@ library(grid)
 library(gridExtra)
 library(reshape2)
 library(ggplot2)
-EdgeR <- function(data,design,coef){
+
+#Constants
+FDR = 0.05
+
+#generalized EdgeR workflow, using quasi-likelihood F-test to identify DEGs
+EdgeR_QL <- function(data,design,coef){
   ####Inital steps of standard edgeR analysis
   data <- DGEList(counts=data)
   data <- calcNormFactors(data)
@@ -15,13 +20,35 @@ EdgeR <- function(data,design,coef){
   return(out)
 }
 
-filterLowly <- function(counts,cut){ #filter out based on counts per million reads
+#generalized EdgeR workflow, using LR test to identify DEGs
+EdgeR <- function(data,design,coef){
+  data <- DGEList(counts=data)
+  data <- calcNormFactors(data)
+  dat <- estimateGLMTrendedDisp(data, design)
+  dat <- estimateGLMTagwiseDisp(dat, design)
+  fit <- glmFit(dat,design)
+  diff <- glmLRT(fit, coef=coef) 
+  ##Calculates FDR
+  out <- topTags(diff,n=Inf,adjust.method="BH")$table
+  return(out)
+}
+
+#General function to generate fisher test of a continency table
+checkOverlap <- function(dat){
+  tbl <- rbind(c(dat[1],dat[2]),
+               c(dat[3],dat[4]))
+  return(fisher.test(tbl))
+}
+
+#filter out based on counts per million reads
+filterLowly <- function(counts,cut){ 
   libs = colSums(counts)/1000000
   cpm = counts/libs
   keep = rowSums(cpm > 1) >= ncol(counts)/2
   return(counts[keep,])
 }
 
+#generate factors df based on counts fie
 genFactor <- function(counts){
   factors <- data.frame(sample=colnames(counts))
   factors$stage = 8
@@ -59,12 +86,24 @@ genFactor <- function(counts){
 
 #Take text file and get data frame we want for analysis
 modifyDF <- function(data){
-  rownames(data)=data$id
+  rownames(data)=data[,1]
   return(data[!grepl("ERCC",rownames(data)),-c(1)])
 }
 
-tissues <- c("head","gaster","mesosoma")
+#Put all expression data in one frame by orthologs
+getOrthoExpr <- function(bee,ant){
+  bee$gene = rownames(bee)
+  ant$gene = rownames(ant)
+  bee = merge(bee,ogg11,by.x="gene",by.y="gene_Amel")
+  ant = merge(ant,ogg11,by.x="gene",by.y="gene_Mphar")
+  allD <- merge(bee,ant,by="OGG")
+  rownames(allD) = allD$OGG
+  allD <- allD[,!grepl("gene",colnames(allD))&!grepl("OGG",colnames(allD))]
+  return(allD)
+}
 
+
+tissues <- c("head","gaster","mesosoma")
 bee <- read.table("~/GitHub/devnetwork/data/bees.counts_edit.txt",header=TRUE)
 ant <- read.table("~/GitHub/devnetwork/data/ants.counts_edit.txt",header=TRUE)
 bee = modifyDF(bee)
@@ -74,14 +113,415 @@ ant = modifyDF(ant)
 ant <- filterLowly(ant,1)
 bee <- filterLowly(bee,1)
 
-ogg2 <- read.csv("~/GitHub/devnetwork/data/HymOGG_hym.csv",sep=" ")
-ogg3 <- read.csv("~/GitHub/devnetwork/data/ThreeWayOGGMap.csv",header=TRUE)
-
-factorB <- genFactor(bee)
+#Make factors
 factorA <- genFactor(ant)
+factorB <- genFactor(bee)
 
-write.csv(factorB,"~/GitHub/devnetwork/data/factors_bees.csv")
-write.csv(factorA,"~/GitHub/devnetwork/data/factors_ants.csv")
+#load tpm values
+beeT <- read.table("~/GitHub/devnetwork/data/bees.tpm.txt",header=TRUE)
+antT <- read.table("~/GitHub/devnetwork/data/ants.tpm.txt",header=TRUE)
+beeT <- modifyDF(beeT)
+antT <- modifyDF(antT)
+
+ogg2 <- read.csv("~/GitHub/devnetwork/data/HymOGG_hym.csv",sep=" ")
+t = table(ogg2$OGG)
+t = t[t==1]
+ogg11 = ogg2[ogg2$OGG %in% names(t),] #get 1-1 orthologs
+
+orthoExpr <- getOrthoExpr(bee,ant)
+factorAll <- genFactor(orthoExpr)
+factorAll$species="bee"
+factorAll$species[grepl("Ant",factorAll$sample)]="ant"
+
+#Load in old data
+load("~/Dropbox/monomorium nurses/data.processed/cleandata.RData")
+antOld <- counts
+antOld <- antOld[rownames(antOld) %in% rownames(ant),]
+
+#################
+##Defining caste toolkits
+#################
+
+#Add tissue_stage bit
+editFactor <- function(f){
+  f <- droplevels(f[f$stage!=1&f$stage!=2&f$caste!="male",]) #remove eggs and 1st instars as well as males
+  f$tissue_stage = as.factor(do.call(paste,c(f[,c(2,3)],list(sep="_"))))#Want to treat each larval stage separately, as well as each tissue of the adult stage. It's necessary to 
+  #do this because the model can't estimate the effect of stage and tissue independently, since there are only adult h/m/g and only larvae of stage 3-6
+  relev = levels(f$tissue_stage)
+  relev[6:8]=c("8_head","8_mesosoma","8_gaster") #intially alphabetical
+  f$tissue_stage = factor(f$tissue_stage,levels=relev)
+  return(f)
+}
+
+#Return list of genes that are DE for caste overall
+#Return both caste main effect and genes with a caste*stage effect
+speciesCaste <- function(d,f){
+  f = editFactor(f)
+  d <- d[,colnames(d) %in% f$sample]
+  design <- model.matrix(~caste+tissue_stage+colony+caste*tissue_stage,data=f) #Note that we are lumping virgin queens, as well as nurses & foragers
+  int <- EdgeR(d,design,12:18)
+  intGenes <- rownames(int)[int$FDR < FDR]
+  design <- model.matrix(~caste+tissue_stage+colony,data=f) #Note that we are lumping virgin queens, as well as nurses & foragers
+  caste <- EdgeR(d[!rownames(d) %in% intGenes,],design,2) #Remove genes that were found to have an interaction factor
+  casteGenes <- rownames(caste)[caste$FDR < FDR]
+  f = droplevels(f[factorA$tissue=="larva",])
+  design <- model.matrix(~caste+colony,data=f)
+  casteL <- EdgeR(d[,colnames(d) %in% f$sample],design,2)
+  casteLGenes <- rownames(casteL)[casteL$FDR < FDR]
+  return(list(main=list(genes=casteGenes,results=caste),int=list(genes=intGenes,results=int),
+              casteL = list(genes=casteLGenes,results=casteL)))
+}
+
+#Return meta-list of lists of genes that are DE at each stage for a single species
+speciesCasteStage <- function(d,f){
+  f = editFactor(f)
+  d <- d[,colnames(d) %in% f$sample]
+  results = list()
+  for (lev in levels(f$tissue_stage)){
+    fs = droplevels(f[grepl(as.character(lev),f$tissue_stage),])
+    ds <- d[,colnames(d) %in% rownames(fs)]
+    design <- model.matrix(~caste,data=fs) #bee L4 only came from 1 colony
+    caste <- EdgeR(ds,design,2)
+    results[[lev]]=list(genes=rownames(caste)[caste$FDR<0.05],results=caste)
+  }
+  return(results)
+}
+
+#return list of genes that are DE for caste overall in both species
+#Returns caste main effect genes and genes with a caste*stage effect
+orthoCaste <- function(d,f){
+  f = editFactor(f)
+  d <- d[,colnames(d) %in% f$sample]  
+  design <- model.matrix(~caste+species+tissue_stage+caste*tissue_stage,data=f) #Note that we are lumping virgin queens, as well as nurses & foragers
+  int <- EdgeR(d,design,11:17)
+  intGenes <- rownames(int)[int$FDR < FDR]
+  design <- model.matrix(~caste+species+tissue_stage,data=f) #Note that we are lumping virgin queens, as well as nurses & foragers
+  caste <- EdgeR(d[!rownames(d) %in% intGenes,],design,2) #Remove genes that were found to have an interaction factor
+  casteGenes <- rownames(caste)[caste$FDR < FDR]
+  f = droplevels(f[factorA$tissue=="larva",])
+  design <- model.matrix(~caste+species,data=f)
+  casteL <- EdgeR(d[,colnames(d) %in% f$sample],design,2)
+  casteLGenes <- rownames(casteL)[casteL$FDR < FDR]
+  return(list(main=list(genes=casteGenes,results=caste),int=list(genes=intGenes,results=int),
+              casteL = list(genes=casteLGenes,results=casteL)))
+}
+
+#Return meta-list of lists of OGGs that are DE at each stage according to a model including species
+orthoCasteStage <- function(d,f){
+  f = editFactor(f)
+  d <- d[,colnames(d) %in% f$sample]
+  results = list()
+  for (lev in levels(f$tissue_stage)){
+    fs = droplevels(f[grepl(as.character(lev),f$tissue_stage),])
+    ds <- d[,colnames(d) %in% rownames(fs)]
+    design <- model.matrix(~caste+species,data=fs) #Don't adjust for colony since since it isn't defined across species
+    caste <- EdgeR(ds,design,2)
+    results[[lev]]=list(genes=rownames(caste)[caste$FDR<0.05],results=caste)
+  }
+  return(results)
+}
+  
+beeOverall <- speciesCaste(bee,factorB)
+beeStage <- speciesCasteStage(bee,factorB)
+antOverall <- speciesCaste(ant,factorA)
+antStage <- speciesCasteStage(ant,factorA)
+oggOverall <- orthoCaste(orthoExpr,factorAll)
+oggStage <- orthoCasteStage(orthoExpr,factorAll)
+
+casteStageOld <- function(d,f){
+  f = droplevels(f[f$tissue=="larva"&f$type!="P"&f$stage!=1,])
+  results=list()
+  for (lev in levels(f$stage)){
+    fs = droplevels(f[f$stage==lev,])
+    ds <- d[,colnames(d) %in% rownames(fs)]
+    if (length(levels(fs$colony)) > 2){
+      design <- model.matrix(~caste+colony,data=fs) #Note that we are lumping virgin queens, as well as nurses & foragers
+    } else {
+      design <- model.matrix(~caste,data=fs) #bee L4 only came from 1 colony
+      }
+      caste <- EdgeR(ds,design,2)
+      results[[lev]]=list(genes=rownames(caste)[caste$FDR<0.05],results=caste)
+  }
+  return(results)
+}
+antStageOld <- casteStageOld(antOld,factors)
+
+beeAll <- c(beeStage,beeOverall)
+antAll <- c(antStage,antOverall)
+oggAll <- c(oggStage,oggOverall)
+
+##################
+###Analyze caste toolkit results
+##################
+
+#Make bar chart of number of OGG DEs over development
+oggSt <- c(oggStage,oggOverall)
+res <- matrix(nrow=11,ncol=2)
+for (i in 1:length(oggSt)){
+  res[i,1]=names(oggSt)[i]
+  res[i,2]=length(oggSt[[i]][["genes"]])
+}
+res = as.data.frame(res)
+colnames(res) = c("Comparison","OGG_DE")
+levs = c("L2","L3","L4","L5",
+         "pupa","head","mesosoma","gaster","Overall Main","CasteXstage")
+res$Comparison=levs
+res2 = melt(res,id.vars=c("Comparison"))
+res2$Comparison=factor(res2$Comparison,levels=levs)
+p <- ggplot(res2,aes(x=Comparison,y=as.numeric(value)))+
+  geom_bar(stat="identity")+theme_bw()+
+  theme(axis.text=element_text(size=13),
+        axis.title=element_text(size=17),
+        axis.text.x = element_text(angle=-45,vjust=0.5))+
+  ylab("Number of DE genes")
+
+#Make stacked bar charts for the composition of caste DEs across development
+#(TRGs, OGG not DE, and OGG DE)
+stackedBar <- function(stageDE,overallDE,oggStage,oggOverall,col){
+  stageDE <- c(stageDE,overallDE)
+  oggSt <- c(oggStage,oggOverall)
+  res <- matrix(nrow=10,ncol=4)
+  for (i in 1:length(stageDE)){
+    res[i,1]=names(stageDE)[i]
+    g = stageDE[[i]][["genes"]]
+    gO = ogg11$OGG[ogg11[,col] %in% g]
+    res[i,2]=sum(oggSt[[i]][["genes"]] %in% gO)
+    res[i,3]=length(gO) - as.numeric(res[i,2])
+    res[i,4] = length(g)-length(gO)
+  }
+  res = as.data.frame(res)
+  colnames(res) = c("Comparison","OGG_DE","OGG_notDE","noOGG")
+  levs = c("L2","L3","L4","L5",
+           "pupa","head","mesosoma","gaster","Overall Main","CasteXstage")
+  res$Comparison=levs
+  res2 = melt(res,id.vars=c("Comparison"))
+  res2$Comparison=factor(res2$Comparison,levels=levs)
+  p <- ggplot(res2,aes(x=Comparison,y=as.numeric(value),fill=variable))+
+    geom_bar(stat="identity")+theme_bw()+
+    theme(axis.text=element_text(size=13),
+          axis.title=element_text(size=17),
+          axis.text.x = element_text(angle=-45,vjust=0.5))+
+    ylab("Number of DE genes")
+  return(list(p,res))
+}
+
+antBar <- stackedBar(antStage,antOverall,oggStage,oggOverall,"gene_Mphar")
+ggsave(antBar[[1]]+ggtitle("Ant"),file="AntDEs.pdf")
+beeBar <- stackedBar(beeStage,beeOverall,oggStage,oggOverall,"gene_Amel")
+ggsave(beeBar[[1]]+ggtitle("Bee"),file="BeeDEs.pdf")
+
+#Stacked bar chart of all OGGs found to be DE in the analysis
+ogg1A = ogg11[ogg11$gene_Amel %in% rownames(bee)&ogg11$gene_Mphar %in% rownames(ant),] #oggs in analysis
+res <- matrix(nrow=10,ncol=4)
+fisher <- matrix(nrow=10,ncol=3)
+for (i in 1:length(beeAll)){
+  res[i,1]=fisher[i,1]=names(beeAll)[i]
+  gB = ogg11$OGG[ogg11[,"gene_Amel"] %in% beeAll[[i]][["genes"]]]
+  gA = ogg11$OGG[ogg11[,"gene_Mphar"] %in% antAll[[i]][["genes"]]]
+  res[i,2]=sum(gB %in% gA)
+  res[i,3]=length(gB) - sum(gB %in% gA)
+  res[i,4] = length(gA) - sum(gB %in% gA)
+  fish=checkOverlap(as.numeric(c(res[i,2:4],nrow(ogg1A))))
+  fisher[i,2]=signif(fish$estimate,4)
+  fisher[i,3]=signif(fish$p.value,4)
+}
+res = as.data.frame(res)
+fisher=as.data.frame(fisher)
+colnames(fisher)=c("Comparison","F","p-value")
+colnames(res)=c("Comparison","DEboth","DEapis","DEmphar")
+levs = c("L2","L3","L4","L5",
+         "pupa","head","mesosoma","gaster","Overall Main","CasteXstage")
+res$Comparison=levs
+fisher$Comparison=levs
+res2 = melt(res,id.vars=c("Comparison"))
+res2$Comparison=factor(res2$Comparison,levels=levs)
+p <- ggplot(res2,aes(x=Comparison,y=as.numeric(value),fill=variable))+
+  geom_bar(stat="identity")+theme_bw()+
+  theme(axis.text=element_text(size=13),
+        axis.title=element_text(size=17),
+        axis.text.x = element_text(angle=-45,vjust=0.5))+
+  ylab("Number of DE genes")
+grid.arrange(tableGrob(cbind(res,fisher[,c(2,3)])))
+
+#Take a look at overlapping gaster and interaction effect genes
+i=8
+gB = ogg11$OGG[ogg11[,"gene_Amel"] %in% beeAll[[i]][["genes"]]]
+gA = ogg11$OGG[ogg11[,"gene_Mphar"] %in% antAll[[i]][["genes"]]]
+gas = gB[gB %in% gA]
+i=10
+gB = ogg11$OGG[ogg11[,"gene_Amel"] %in% beeAll[[i]][["genes"]]]
+gA = ogg11$OGG[ogg11[,"gene_Mphar"] %in% antAll[[i]][["genes"]]]
+int = gB[gB %in% gA]
+o = ogg11[ogg11$OGG %in% gas,]
+
+go <- read.csv("~/Writing/Data/NurseSpecialization_transcriptomicData/GOannotation.csv")
+go = go[,c(2:4)]
+universe <- as.character(unique(go$gene[go$gene %in% ogg1A$gene_Mphar]))
+goFrame=GOFrame(go[go$gene %in% universe,],organism="Monomorium pharaonis")
+goAllFrame=GOAllFrame(goFrame)
+gsc <- GeneSetCollection(goAllFrame, setType = GOCollection())
+
+GOstat(o$gene_Mphar)
+
+#Make volcano plot for a species DEGs, and color the DEGs that are in the OGG DE list
+volcanoToolkit <- function(results1,results2,col1,col2,dT,f){
+  upOGG <- rownames(results2)[results2$logFC > 0 & results2$FDR < FDR]
+  downOGG <- rownames(results2)[results2$logFC < 0 & results2$FDR < FDR]
+  upGene <- ogg11[,col1][ogg11[,col2] %in% upOGG] #Get species names of genes
+  downGene <- ogg11[,col1][ogg11[,col2] %in% downOGG]
+  f = f[!grepl("L1",f$sample)&!grepl("_E",f$sample)&!grepl("_M",f$sample),]
+  dT = dT[rownames(dT) %in% rownames(results1),colnames(dT) %in% f$sample] #Take out 1st instar larvae, eggs, and males
+  expr = rowSums(dT)/ncol(dT)
+  d = data.frame(expr = expr,gene=names(expr))
+  results1$gene=rownames(results1)
+  results = merge(results1,d,by="gene")
+  results = results[results$FDR < FDR,]
+  results$color="black"
+  results$color[results$gene %in% upGene]="blue"
+  results$color[results$gene %in% downGene]="red"
+  p <- ggplot(results,aes(x=log(expr+1),y=logFC))+
+        geom_point(color=results$color)+theme_bw()+ylab("logFC queen vs worker")
+}
+
+p <- volcanoToolkit(antStage[["8_gaster"]][["results"]],beeStage[["8_gaster"]][["results"]],"gene_Mphar","gene_Amel",antT,factorA[factorA$tissue=="gaster",])
+p <- volcanoToolkit(beeStage[["8_gaster"]][["results"]],antStage[["8_gaster"]][["results"]],"gene_Amel","gene_Mphar",beeT,factorB[factorB$tissue=="gaster",])
+p <- volcanoToolkit(antOverall[["main"]][["results"]],beeOverall[["main"]][["results"]],"gene_Mphar","gene_Amel",antT,factorA)
+
+#the following one is interesting and weird
+p <- volcanoToolkit(beeOverall[["main"]][["results"]],antOverall[["main"]][["results"]],"gene_Amel","gene_Mphar",beeT,factorB)
+
+#Make paired bar chart of expression for the different categories of DEGs
+#Could measure expression across castes, or in the caste in which it is higher
+pairedBar <- function(DEs,OGGs,dT,f,col){
+  f = editFactor(f)
+  results <- list()
+  for (lev in levels(f$tissue_stage)){
+    fs = f[grepl(lev,f$tissue_stage),]
+    expr = rowSums(dT[,colnames(dT) %in% fs$sample])/ncol(dT[,colnames(dT) %in% fs$sample])
+    expr = data.frame(expr=expr,gene=names(expr))
+    res = DEs[[lev]][["results"]]
+    res$gene=rownames(res)
+    res = merge(res,expr,by="gene")
+    res = res[res$FDR < FDR,]
+    res$OGG="noOGG"
+    res$OGG[res$gene %in% ogg11[,col]]="OGGpresent"
+    res$OGG[res$gene %in% ogg11[,col][ogg11$OGG %in% OGGs[[lev]][["genes"]]]]="OGG_DE"
+    res$lev = lev
+    results[[lev]]=res[,c(7:9)]
+  }
+  for (lev in c("main","int")){
+    expr = rowSums(dT[,colnames(dT) %in% f$sample])/ncol(dT[,colnames(dT) %in% f$sample])
+    expr = data.frame(expr=expr,gene=names(expr))
+    res = DEs[[lev]][["results"]]
+    res$gene=rownames(res)
+    res = merge(res,expr,by="gene")
+    res = res[res$FDR < FDR,]
+    res$OGG="noOGG"
+    res$OGG[res$gene %in% ogg11[,col]]="OGGpresent"
+    res$OGG[res$gene %in% ogg11[,col][ogg11$OGG %in% OGGs[[lev]][["genes"]]]]="OGG_DE"
+    res$lev = lev
+    results[[lev]]=res[,c("expr","OGG","lev")] 
+  }
+  results = ldply(results)
+  res = as.data.frame(results)
+  colnames(res)= c("Comparison","Expression","OGG")
+  p <- ggplot(res,aes(x=Comparison,y=log(Expression+1),fill=OGG))+
+    geom_boxplot(notch=TRUE)
+  return(list(p,res))
+}
+
+p <- pairedBar(antAll,oggAll,antT,factorA,"gene_Mphar")
+p <- pairedBar(beeAll,oggAll,beeT,factorB,"gene_Amel")
+
+
+#Other analyses:
+#How old are toolkit genes?
+#Are the developmental genes? ask for OGGs as well as within-species
+#What functions do they have?
+#Could also compare connectivity, or in some way as how central caste toolkit genes are
+#Could also be nice to plot logFC of all caste*stage genes
+  
+#It also would be interesting to plot the expression of MRJP over time
+
+  
+######
+##Analysis using one model
+######
+design <- model.matrix(~caste+bigStage+colony+species,data=droplevels(factorAll[factorAll$caste!="male"&factorAll$stage!=1&factorAll$stage!=2,]))
+caste <- EdgeR(orthoExpr[,factorAll$caste!="male"&factorAll$stage!=1&factorAll$stage!=2],design,2)
+
+###################
+###New section: comparing developmental timecourses
+###################
+
+
+#######
+##Heatmaps over time
+######
+#Filter out 1st and 2nd stage (egg/1st instar) and make a new variable including stage and tissue
+filterFactor <- function(f){
+  f = f[f$stage!=1&f$stage!=2,] #We'll treat eggs and 1st instar larvae separately since there is no caste
+  f$stage_tissue = do.call(paste, c(f[,c("stage","tissue")],list(sep='-')))
+  f$stage_tissue = as.factor(f$stage_tissue)
+  return(f)
+}
+
+#subset data by stage
+subData <- function(df,f,lev){
+  return(df[colnames(df) %in% f$sample[f$stage_tissue==levels(f$stage_tissue)[lev]]])
+}
+
+#calculate correlation matrix across stages for two separate dataframes
+corStage <- function(df1,df2,f1,f2){
+  f1 = filterFactor(f1)
+  f2 = filterFactor(f2)
+  corMat <- matrix(nrow=8,ncol=8)
+  for (i in 1:8){
+    for (j in 1:8){
+      d1 = subData(df1,f1,i)
+      d2 = subData(df2,f2,j)
+      corMat[i,j] = cor((rowSums(d1)/ncol(d1)),(rowSums(d2)/ncol(d2)))
+    }
+  }
+  return(corMat)
+}
+
+makePlot <- function(corMat,labx,laby){
+  m = as.data.frame(corMat)
+  colnames(m) = rownames(m) = c("L2","L3","L4","L5","pupa","gaster","head","mesosoma")
+  m$StageX = factor(rownames(m),levels=colnames(m))
+  m1 = melt(m,id.vars="StageX")
+  p <- ggplot(m1,aes(variable,StageX))+
+    geom_tile(aes(fill=value))+
+    xlab(labx)+ylab(laby)+
+    scale_fill_continuous(na.value="white",name="r",guide="colorbar")+
+    guides(fill=guide_colorbar(nbin=100))+
+    scale_y_discrete(limits=rev(levels(m1$StageX)),position="right")+
+    scale_x_discrete(position="top")+
+    theme(legend.position="bottom",
+          legend.key.width=unit(1,"cm"),
+          panel.background = element_rect(fill="white"),
+          axis.text=element_text(size=11),
+          axis.title=element_text(size=17),
+          axis.title.x=element_text(margin=margin(t=20,r=0,b=20,l=0)),
+          axis.title.y=element_text(margin=margin(t=0,r=0,b=0,l=20)),
+          panel.border = element_rect(colour = "black", fill=NA, size=1),
+          plot.margin=unit(c(0.5,0.5,0,0.5),"cm"))
+  return(p)
+}
+
+antbee = corStage(orthoExpr[,grepl("Bee",colnames(orthoExpr))],orthoExpr[,grepl("Ant",colnames(orthoExpr))],
+                  factorAll[grepl("Bee",rownames(factorAll)),],factorAll[grepl("Ant",rownames(factorAll)),])
+
+antant = corStage(orthoExpr[,grepl("Ant",colnames(orthoExpr))],orthoExpr[,grepl("Ant",colnames(orthoExpr))],
+                  factorAll[grepl("Ant",rownames(factorAll)),],factorAll[grepl("Ant",rownames(factorAll)),])
+
+
+makePlot(beeQW,"Bee","Ant")
+
+beeQW = corStage(beeT[,factorB$caste=='queen'],beeT[,factorB$caste=='worker'],factorB[factorB$caste=='queen',],factorB[factorB$caste=='worker',])
+antQW = corStage(antT[,factorA$caste=='queen'],antT[,factorA$caste=='worker'],factorA[factorA$caste=='queen',],factorA[factorA$caste=='worker',])
+
 
 #########Functions for the analysis
 #############
@@ -357,7 +797,7 @@ for (i in 1:4){
   for (j in 1:nrow(sharedOGG)){
     row = Dev_OGG[[i]][Dev_OGG[[i]]$OGG %in% sharedOGG$OGG[j],]
     Fmat[j,i] = row$LR
-    if (row$FDR < 0.05){
+    if (row$FDR < FDR){
       venn[j,i] = 1
     } else {
       venn[j,i] = 0
@@ -440,8 +880,8 @@ numDEframe <- function(list){
   corMat = matrix(nrow=3,ncol=4)
   for (i in 1:3){
     over = merge(beeOGG[[tissues[i]]],antOGG[[tissues[i]]],by="OGG")
-    fr[i,1]=sum(beeOGG[[tissues[i]]]$FDR < 0.05)
-    fr[i,2]=sum(antOGG[[tissues[i]]]$FDR < 0.05)
+    fr[i,1]=sum(beeOGG[[tissues[i]]]$FDR < FDR)
+    fr[i,2]=sum(antOGG[[tissues[i]]]$FDR < FDR)
     fr[i,3]=sum(over$FDR.x < 0.05 & over$FDR.y < 0.05)
     mat = cor.test(over$logFC.x,over$logFC.y)
     corMat[i,1] = signif(mat$estimate,4)
@@ -485,8 +925,8 @@ numDEoverlap <- function(list,test){
   nDE <- matrix(nrow=3,ncol=9)
   corMat <- matrix(nrow=3,ncol=4)
   for (i in 1:3){
-    beeG = beeOGG[[tissues[i]]][beeOGG[[tissues[i]]]$FDR < 0.05,]
-    antG = antOGG[[tissues[i]]][antOGG[[tissues[i]]]$FDR < 0.05,]
+    beeG = beeOGG[[tissues[i]]][beeOGG[[tissues[i]]]$FDR < FDR,]
+    antG = antOGG[[tissues[i]]][antOGG[[tissues[i]]]$FDR < FDR,]
     overG = beeG$OGG[beeG$OGG %in% antG$OGG]
     nDE[i,1] = length(devGene[[1]])
     nDE[i,2] = nrow(beeG)
@@ -536,10 +976,10 @@ ogg111 = ogg111[ogg111$gene_Mphar %in% rownames(antDev[[1]]) &
                   ogg111$gene_Amel %in% rownames(beeDev[[1]]),] #Filter for oggs in the analysis
 
 
-beeDW = rownames(beeDev[[1]])[beeDev[[1]]$FDR < 0.05]
-antDW = rownames(antDev[[1]])[antDev[[1]]$FDR < 0.05]
-beeDQ = rownames(beeDev[[2]])[beeDev[[2]]$FDR < 0.05]
-antDQ = rownames(antDev[[2]])[antDev[[2]]$FDR < 0.05]
+beeDW = rownames(beeDev[[1]])[beeDev[[1]]$FDR < FDR]
+antDW = rownames(antDev[[1]])[antDev[[1]]$FDR < FDR]
+beeDQ = rownames(beeDev[[2]])[beeDev[[2]]$FDR < FDR]
+antDQ = rownames(antDev[[2]])[antDev[[2]]$FDR < FDR]
 
 beeD = beeDW[beeDW %in% beeDQ]
 antD = antDW[antDW %in% antDQ]
@@ -561,7 +1001,7 @@ oggDevF[oggDevF$OGG %in% MasterDev,]
 ##Are social and caste toolkits enriched for developmental genes, as defined in Dmel?
 ##############
 getOGG <- function(list, column){
-  gene = rownames(list)[list$FDR < 0.05]
+  gene = rownames(list)[list$FDR < FDR]
   oggC = ogg111$OGG[ogg111[,column] %in% gene]
   return(oggC)
 }
@@ -591,29 +1031,6 @@ for (test in tests){
   }
 }
 
-###################
-###New section: comparing developmental timecourses
-###################
-beeT <- read.table("~/GitHub/devnetwork/data/bees.tpm.txt",header=TRUE)
-antT <- read.table("~/GitHub/devnetwork/data/ants.tpm.txt",header=TRUE)
-beeT <- modifyDF(beeT)
-antT <- modifyDF(antT)
-
-t = table(ogg2$OGG)
-t = t[t==1]
-ogg11 = ogg2[ogg2$OGG %in% names(t),]
-
-#We want to get expression data labeled by OGG (1-1 bee-ant)
-oggExpr <- function(d,col){
-  keep = ncol(d)
-  d$gene = rownames(d)
-  d = merge(d,ogg11,by.x="gene",by.y=col)
-  rownames(d) = d$OGG
-  return(d[,2:(keep+2)])
-}
-
-beeTO <- oggExpr(beeT,"gene_Amel")
-antTO <- oggExpr(antT,"gene_Mphar")
 
 #############
 ##Principle component analysis
@@ -621,51 +1038,37 @@ antTO <- oggExpr(antT,"gene_Mphar")
 allF <- rbind(factorB,factorA)
 allF$species = "bee"
 allF$species[grepl("Ant",allF$sample)]="ant"
+allF$stage_tissue = do.call(paste, c(allF[,c("stage","tissue")],list(sep='-')))
+allF$bigStage = 'adult'
+allF$bigStage[allF$stage==7]='pupa'
+allF$bigStage[allF$stage!=7&allF$stage!=8]='brood'
 allT = merge(beeTO,antTO,by="OGG")
 rownames(allT) = allT$OGG
 allT = allT[,-c(1)]
-topGene = rownames(allT)[rowSums(allT) > quantile(rowSums(allT,0.9))]
 
-pc <- prcomp(t(log(allT+1)))
+all_trans = log(allT + sqrt(allT ^ 2 + 1))
+pc <- prcomp(t(all_trans),scale=T)
+cor(as.numeric(as.factor(allF$species)),pc$x[,1])
+cor(as.numeric(as.factor(allF$bigStage)),pc$x[,2])
+cor(as.numeric(as.factor(allF$tissue)),pc$x[,7])
+
 data = as.data.frame(pc$x)
 data = cbind(data,allF)
 data$stage_tissue = do.call(paste, c(allF[,c("stage","tissue")],list(sep='-')))
-ggplot(data,aes(x=PC3,y=PC4,color=species,shape=stage))+
+ggplot(data,aes(x=PC1,y=PC2,color=bigStage,shape=species))+
   geom_point()
   
+ggplot(data,aes(x=PC2,y=PC3,color=stage,shape=tissue))+
+  geom_point()
+
+antT_l = log(antT+sqrt(antT^2+1))
+pc <- prcomp(t(antT_l[rowSums(antT_l) > 0,]),scale=T)
+data = as.data.frame(pc$x)
+data = cbind(data,factorA)
+ggplot(data[data$tissue=="larva",],aes(x=PC1,y=PC3,color=stage,shape=colony))+
+  geom_point()
+#1st component is species, then stage, then tissue
 
 
-#Filter out 1st and 2nd stage (egg/1st instar) and make a new variable including stage and tissue
-filterFactor <- function(f){
-  f = f[f$stage!=1&f$stage!=2,] #We'll treat eggs and 1st instar larvae separately since there is no caste
-  f$stage_tissue = do.call(paste, c(f[,c("stage","tissue")],list(sep='-')))
-  f$stage_tissue = as.factor(f$stage_tissue)
-  return(f)
-}
-
-#subset data by stage
-subData <- function(df,f,lev){
-  return(df[colnames(df) %in% f$sample[f$stage_tissue==levels(f$stage_tissue)[lev]]])
-}
-
-#calculate correlation matrix across stages for two separate dataframes
-corStage <- function(df1,df2,f1,f2){
-  f1 = filterFactor(f1)
-  f2 = filterFactor(f2)
-  corMat <- matrix(nrow=8,ncol=8)
-  for (i in 1:8){
-    for (j in 1:8){
-      d1 = subData(df1,f1,i)
-      d2 = subData(df2,f2,j)
-      corMat[i,j] = cor((rowSums(d1)/ncol(d1)),(rowSums(d2)/ncol(d2)))
-    }
-  }
-  return(corMat)
-}
-
-
-
-
-beeQW = corStage(beeT[,factorB$caste=='queen'],beeT[,factorB$caste=='worker'],factorB[factorB$caste=='queen',],factorB[factorB$caste=='worker',])
 
 
