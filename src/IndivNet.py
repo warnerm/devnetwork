@@ -6,7 +6,8 @@ from compiler.ast import nodes
 import pandas as pd
 import sys, getopt
 import numpy as np
-
+from joblib import Parallel, delayed
+import multiprocessing
 
 def InOut(argv):
     inputfile=''
@@ -48,19 +49,20 @@ def GiantGraph(net):
             else:
                 continue
 
-
+def callConnections(dfCor,d,gene):
+    GeneCor = dfCor.iloc[gene]
+    order = GeneCor.sort_values(ascending=False)
+    keep = order[1:d + 1].index[0:d].tolist()
+    g = np.repeat(gene,d)
+    ret = pd.DataFrame({'gene':g,'conn':keep})
+    return ret
 
 #make network based on absolute value of pearson correlation
 def MakeNetwork(dfCor,d):
-    net= pd.DataFrame([[0,0]])
-    for gene in range(dfCor.shape[0]):
-        GeneCor = dfCor.iloc[gene]
-        order = GeneCor.sort_values(ascending=False)
-        keep = order[1:d+1].index[0:d].tolist() #skip first value because that is self-correlation
-        dfSm = pd.DataFrame([[order.index[0]]*d,keep])
-        dfSm = dfSm.transpose()
-        net=pd.concat([net,dfSm])
-    return net[1:]
+    num_cores = multiprocessing.cpu_count()
+    results = Parallel(n_jobs=num_cores)(delayed(callConnections)(dfCor,d,gene) for gene in range(dfCor.shape[0]))
+    results = pd.concat(results)
+    return results
 
 def main(argv):
     #inputfile, outputfile = InOut(argv)
