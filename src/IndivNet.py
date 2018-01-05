@@ -86,7 +86,7 @@ def main(argv):
         else:
             d = d+1
 
-    net.to_csv(outputfile,sep="\t",index=None)
+    net.to_csv(outputfile,sep="\t",index=None,header=False)
 
 if __name__ == "__main__":
     main(sys.argv[1:])
