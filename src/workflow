@@ -1,0 +1,2 @@
+singleNet.R #to get correlations of expression data. Python doesn't perform well on these large correlations for some reason
+IndivNet.py #Use output from singleNet.R to make single network graphs
