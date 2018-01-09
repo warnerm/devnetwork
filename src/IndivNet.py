@@ -72,20 +72,33 @@ def MakeNetwork(dfCor,d):
 
 def main(argv):
     inputfile, outputfile = InOut(argv)
-    df = pd.read_table(inputfile)
-    df = df.drop(df.columns[0],axis=1) #Drop gene column
-    df = hypsine(df)
-    pearson = df.transpose().corr(method='pearson')
-    pearson = pearson.abs()
-    d = 1 #variable specifying number of genes each gene is connected to
+
+    #Start d at 10 just to guess, and go up or down based on whether or not it's a GiantGraph
+    d = 10 #variable specifying number of genes each gene is connected to
+
+    #Read in dataframe of pearson correlations
+    df = pd.read_csv(inputfile)
+    df = abs(df) #Make networks based on magnitude of correlation ('unsigned')
+    net = MakeNetwork(df, d)
+    if (GiantGraph(net)): direction = 0
+    else: direction = 1
     while True:
         print d
-        net = MakeNetwork(pearson,d)
-        if (GiantGraph(net)):
-            break
-        else:
-            d = d+1
+        net = MakeNetwork(df,d)
 
+        #direction == 1 means we are making bigger graphs
+        if (direction):
+            if GiantGraph(net):
+                break
+            else: d = d + 1
+
+        #direction == 0 means we are making smaller graphs
+        else:
+            if not GiantGraph(net):
+                net = MakeNetwork(df,d+1) #We've gone one step to far
+            else: d = d - 1
+
+    print "final" + str(d)
     net.to_csv(outputfile,sep="\t",index=None,header=False)
 
 if __name__ == "__main__":
