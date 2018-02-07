@@ -88,6 +88,10 @@ def nextGene(genes,topG):
     del topG[ng]
     return next,topG,True
 
+def addNext(genes,next,d):
+    genes = np.unique(np.append(genes,Ranks.iloc[next,:d]))
+    return genes
+
 #Check if we have a giant network
 def CheckIfNetGiant(d):
 
@@ -100,6 +104,7 @@ def CheckIfNetGiant(d):
     #Add genes to the network, starting with the next highest connected gene that is in the list already
     while(True):
         next,topG,cont = nextGene(genes, topG)
+        genes = addNext(genes,next,d)
         #cont returns false if we've exhausted our options (so graph isn't connected)
         if cont:
             bool,  genes = addGenes(genes, d, next)
@@ -116,24 +121,27 @@ def getConns(i,d):
 
 #Print network
 def getNet(d):
-    net = [getConns(i,d) for i in range(df.shape[0])]
+    net = [getConns(i,d) for i in range(Ranks.shape[0])]
     return pd.concat(net)
 
 #Normalize fpkm using hyperbolic sine transformation
 def main(argv):
     #inputfile, outputfile = InOut(argv)
-    inputfile = "~/Data/devnetwork/beesTESTpCor.csv"
+    inputfile = "~/Data/devnetwork/beespCor.csv"
     outputfile = "~/Data/devnetwork/beesOne.txt"
     print 's'
     #Start d at 10 just to guess, and go up or down based on whether or not it's a GiantGraph
-    d = 30 #variable specifying number of genes each gene is connected to
+    d = 10 #variable specifying number of genes each gene is connected to
 
     #Read in dataframe of pearson correlations
     global df, Ranks, TopGenes
     df = pd.read_csv(inputfile)
     df = abs(df) #Make networks based on magnitude of correlation ('unsigned')
+    print 'here'
     Ranks = pd.DataFrame([getRanks(i) for i in range(df.shape[0])])
+    print 'here'
     TopGenes = getTopGenes()
+
     Giant = True
     while Giant:
         print d
