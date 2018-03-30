@@ -102,7 +102,34 @@ getOrthoExpr <- function(bee,ant){
   return(allD)
 }
 
+#Add tissue_stage bit
+editFactor <- function(f){
+  f <- droplevels(f[f$stage!=1&f$stage!=2&f$caste!="male",]) #remove eggs and 1st instars as well as males
+  f$tissue_stage = as.factor(do.call(paste,c(f[,c(2,3)],list(sep="_"))))#Want to treat each larval stage separately, as well as each tissue of the adult stage. It's necessary to 
+  #do this because the model can't estimate the effect of stage and tissue independently, since there are only adult h/m/g and only larvae of stage 3-6
+  relev = levels(f$tissue_stage)
+  relev[6:8]=c("8_head","8_mesosoma","8_gaster") #intially alphabetical
+  f$tissue_stage = factor(f$tissue_stage,levels=relev)
+  return(f)
+}
 
+#Treat larva as one stage
+editFactor_oneLarv <- function(f){
+  f <- droplevels(f[f$stage!=1&f$stage!=2&f$caste!="male",]) #remove eggs and 1st instars as well as males
+  f$tissue_stage = as.factor(do.call(paste,c(f[,c(2,3)],list(sep="_"))))#Want to treat each larval stage separately, as well as each tissue of the adult stage. It's necessary to 
+  #do this because the model can't estimate the effect of stage and tissue independently, since there are only adult h/m/g and only larvae of stage 3-6
+  relev = levels(f$tissue_stage)
+  relev[6:8]=c("8_head","8_mesosoma","8_gaster") #intially alphabetical
+  f$tissue_stage = factor(f$tissue_stage,levels=relev)
+  f$tissue_stage_oneLarv = f$tissue_stage
+  f$tissue_stage[f$tissue == "larva"] = "3_larva"
+  f$tissue_stage = droplevels(f$tissue_stage)
+  return(f)
+}
+
+############
+##Loading in, cleaning data
+###########
 tissues <- c("head","gaster","mesosoma")
 bee <- read.table("~/GitHub/devnetwork/data/bees.counts_edit.txt",header=TRUE)
 ant <- read.table("~/GitHub/devnetwork/data/ants.counts_edit.txt",header=TRUE)
@@ -128,49 +155,222 @@ t = table(ogg2$OGG)
 t = t[t==1]
 ogg11 = ogg2[ogg2$OGG %in% names(t),] #get 1-1 orthologs
 
+#Generate dataframe of ant and bee expression for each OGG
 orthoExpr <- getOrthoExpr(bee,ant)
 factorAll <- genFactor(orthoExpr)
 factorAll$species="bee"
 factorAll$species[grepl("Ant",factorAll$sample)]="ant"
 
-#Load in old data
-load("~/Dropbox/monomorium nurses/data.processed/cleandata.RData")
-antOld <- counts
-antOld <- antOld[rownames(antOld) %in% rownames(ant),]
+############
+###Part 1: Broad signatures of caste - NMDS analysis
+############
+
+############
+###Part 2: Are there "queen" or "worker" genes across development?
+############
+#Return list of genes that are DE for caste overall
+speciesCasteDE <- function(d,f,factorFun){
+  f = factorFun(f)
+  d <- d[,colnames(d) %in% f$sample]
+  design <- model.matrix(~caste+tissue_stage+colony+caste*tissue_stage,data=f) #Note that we are lumping virgin queens, as well as nurses & foragers
+  int <- EdgeR_QL(d,design,(4+length(levels(f$tissue_stage))):(2+length(levels(f$tissue_stage))*2)) 
+  genesInt <- rownames(int)[int$FDR < FDR]
+  design <- model.matrix(~caste+tissue_stage+colony,data=f) 
+  caste <- EdgeR_QL(d,design,2) 
+  genesDE <- rownames(caste)[caste$FDR < FDR]
+  design <- model.matrix(~caste+tissue_stage+colony,data=f) 
+  caste2 <- EdgeR_QL(d[!rownames(d) %in% genesInt,],design,2)  #Remove genes with a significant interaction factor
+  genesDE_noInt <- rownames(caste2)[caste2$FDR < FDR]
+  return(list(genesDE,genesInt,genesDE_noInt,caste,caste2))
+}
+
+#Return list of DE genes at each stage
+speciesCasteStage <- function(d,f,factorFun){
+  f = factorFun(f)
+  d <- d[,colnames(d) %in% f$sample]
+  results = list()
+  for (lev in levels(f$tissue_stage)){
+    fs = droplevels(f[grepl(as.character(lev),f$tissue_stage),])
+    ds <- d[,colnames(d) %in% rownames(fs)]
+    design <- model.matrix(~caste,data=fs) #bee L4 only came from 1 colony
+    caste <- EdgeR_QL(ds,design,2)
+    results[[lev]]=list(genes=rownames(caste)[caste$FDR<0.05],results=caste)
+  }
+  return(results)
+}
+
+#Take output of 'speciesCasteStage' to identify genes DE at each stage; also genes with consistent logFC
+speciesCasteAllStage <- function(stageRes){
+  #start with all genes
+  genes = geneslfcQ = geneslfcW = rownames(stageRes[[1]][[2]])
+  for (i in 1:length(stageRes)){
+    genes = genes[genes %in% stageRes[[i]][[1]]]
+    geneslfcQ = genes[genes %in% rownames(stageRes[[i]][[2]])[stageRes[[i]][[2]]$logFC < 0]]
+    geneslfcW = genes[genes %in% rownames(stageRes[[i]][[2]])[stageRes[[i]][[2]]$logFC > 0]]
+  }
+  return(list(genes,geneslfcQ,geneslfcW))
+}
+
+speciesDEtests <- function(d,f,factorFun){
+  OverallDE <- speciesCasteDE(d,f,factorFun)
+  Stage <- speciesCasteStage(d,f,factorFun)
+  ConsistentDE <- speciesCasteAllStage(Stage)
+  return(list(OverallDE,Stage,ConsistentDE))
+}
+
+beeTests = speciesDEtests(bee,factorB,editFactor)
+beeTests_oneLarv = speciesDEtests(bee,factorB,editFactor_oneLarv)
+antTests = speciesDEtests(ant,factorA,editFactor)
+antTests_oneLarv = speciesDEtests(ant,factorA,editFactor_oneLarv)
+
+#Finding: There are no "consistent" DE
+nGenes_consistentlyDE <- lapply(list(beeTests,beeTests_oneLarv,antTests,antTests_oneLarv),function(x){
+  lapply(c(1,2,3),function(j) length(x[[3]][[j]]))
+})
+
+#There are, however some genes that are DE overall according to the model. We'll incorporate those below
+
+############
+###Part 3: Caste and social toolkits--in each species and the overlap
+############
+#Return list of DE genes at each stage
+speciesSocial <- function(d,f){
+  f = droplevels(f[!is.na(f$NF),])
+  d <- d[,colnames(d) %in% f$sample]
+  results = list()
+  f$tissue=factor(f$tissue,levels = c("head","mesosoma","gaster"))
+  for (lev in levels(f$tissue)){
+    fs = droplevels(f[grepl(as.character(lev),f$tissue),])
+    ds <- d[,colnames(d) %in% rownames(fs)]
+    design <- model.matrix(~NF+colony,data=fs)
+    res <- EdgeR_QL(ds,design,2)
+    results[[lev]]=list(genes=rownames(res)[res$FDR<0.05],results=res)
+  }
+  return(results)
+}
+
+beeSocial <- speciesSocial(bee,factorB)
+antSocial <- speciesSocial(ant,factorA)
+
+#Shared social toolkit
+sharedGene <- function(b,a){
+  b_noOGG = b[!b %in% ogg11$gene_Amel]
+  a_noOGG = a[!a %in% ogg11$gene_Mphar]
+  aOGG = ogg11$OGG[ogg11$gene_Mphar %in% a]
+  bOGG = ogg11$OGG[ogg11$gene_Amel %in% b]
+  shared = aOGG[aOGG %in% bOGG]
+  
+  #Genes with an OGG but not DE in both species
+  aOGG_nS = aOGG[!aOGG %in% shared]
+  bOGG_nS = bOGG[!bOGG %in% shared]
+  
+  return(list(shared,a_noOGG,b_noOGG,aOGG_nS,bOGG_nS))
+}
+
+social_toolkit <- lapply(seq(1,3), function(i) sharedGene(beeSocial[[i]][[1]],antSocial[[i]][[1]]))
+
+#Caste toolkit across development
+caste_toolkit_dev <- lapply(seq(1,8),function(i) sharedGene(beeTests[[2]][[i]][[1]],antTests[[2]][[i]][[1]]))
+caste_toolkit_dev_oneLarv <- lapply(seq(1,5),function(i) sharedGene(beeTests_oneLarv[[2]][[i]][[1]],antTests_oneLarv[[2]][[i]][[1]]))
+
+#Caste toolkit, main effect, caste*stage, and main effect with c*s removed
+caste_toolkit_overall <- lapply(seq(1,3),function(i) sharedGene(beeTests[[1]][[i]],antTests[[1]][[i]]))
+caste_toolkit_overall_oneLarv <- lapply(seq(1,3),function(i) sharedGene(beeTests_oneLarv[[1]][[i]],antTests_oneLarv[[1]][[i]]))
+
+#Correlation of logFC between queens and workers or nurses and foragers at each stage
+compLogFC <- function(b,a){
+  b$Gene = rownames(b)
+  a$Gene = rownames(a)
+  b = merge(b,ogg11,by.x="Gene",by.y="gene_Amel")
+  a = merge(a,ogg11,by.x="Gene",by.y="gene_Mphar")
+  both = merge(a,b,by = "OGG")
+  simpCor <- cor.test(both$logFC.x,both$logFC.y)
+  absCor <- cor.test(abs(both$logFC.x),abs(both$logFC.y))
+  return(list(simpCor,absCor))
+}
+
+social_toolkit_lfc <- lapply(seq(1,3), function(i) compLogFC(beeSocial[[i]][[2]],antSocial[[i]][[2]]))
+
+#Caste toolkit across development
+caste_toolkit_dev_lfc <- lapply(seq(1,8),function(i) compLogFC(beeTests[[2]][[i]][[2]],antTests[[2]][[i]][[2]]))
+caste_toolkit_dev_oneLarv_lfc <- lapply(seq(1,5),function(i) compLogFC(beeTests_oneLarv[[2]][[i]][[2]],antTests_oneLarv[[2]][[i]][[2]]))
+
+#Caste toolkit, main effect and main effect with c*s removed. Note that we can't do caste*stage...
+caste_toolkit_overall <- lapply(c(4,5),function(i) compLogFC(beeTests[[1]][[i]],antTests[[1]][[i]]))
+caste_toolkit_overall_oneLarv <- lapply(c(4,5),function(i) compLogFC(beeTests_oneLarv[[1]][[i]],antTests_oneLarv[[1]][[i]]))
+
+#Plot number of genes results
+plotNgene <- function(res,name){
+  numbers <- ldply(lapply(res,function(x) {
+    unlist(lapply(x,function(i){
+      length(i)
+    }))}))
+  colnames(numbers) = c("shared","Mphar_noOGG","Amel_noOGG","Mphar_notShared","Amel_notShared")
+  numbers$tissue = name
+  d = melt(numbers,id.vars = 'tissue')
+  p <- ggplot(d,aes(x = tissue, y = value, fill = variable))+
+    geom_bar(stat = "identity",position = position_dodge())+
+    ylab("Number of DE Genes")
+  return(p)
+}
+
+#Plot the log fold change comparison results
+plotLFC <- function(res,names){
+  compiled <- ldply(lapply(unlist(res,recursive = FALSE),function(x) c(x$estimate,x$conf.int,x$p.value)))
+  compiled$type = rep(c("signed","absolute value"))
+  compiled$name = rep(names,each = 2)
+  colnames(compiled)[2:4] = c("ci1","ci2","Pval")
+  p <- ggplot(compiled,aes(x = name, y = cor, fill = type))+
+    geom_bar(stat = "identity",position = position_dodge())+
+    ylab("correlation coefficient")+
+    geom_errorbar(aes(ymin = ci1, ymax = ci2),position = position_dodge(width=1),width = 0.5)
+  return(p)
+}
+
+socPlotLFC <- plotLFC(social_toolkit_lfc,c("head","thorax","abdomen"))
+ctdev_lfc_plot <- plotLFC(caste_toolkit_dev_lfc,names(beeTests[[2]]))
+ctdev_onelarv_lfc_plot <- plotLFC(caste_toolkit_dev_oneLarv_lfc,names(beeTests_oneLarv[[2]]))
+ct_overall_plot <- plotLFC(caste_toolkit_overall,c("Overall","Interaction removed"))
+ct_overall_plot_oneLarv <- plotLFC(caste_toolkit_overall_oneLarv,c("Overall","Interaction removed"))
+
+socPlot <- plotNgene(social_toolkit,c("head","thorax","abdomen"))
+ctdev_plot <- plotNgene(caste_toolkit_dev,names(beeTests[[2]]))
+ctdev_onelarv_plot <- plotNgene(caste_toolkit_dev_oneLarv,names(beeTests_oneLarv[[2]]))
+ct_overall_nde_plot <- plotNgene(caste_toolkit_overall,c("Overall","Interaction removed"))
+ct_overall_nde_plot_oneLarv <- plotNgene(caste_toolkit_overall_oneLarv,c("Overall","Interaction removed"))
+
+png("~/Writing/Figures/NurseLarva/nDE.png",width=4000,height=5000,res=600)
+grid.arrange(socPlot+theme_bw(),
+             ctdev_plot+theme_bw(),
+             ctdev_onelarv_plot+theme_bw(),ncol = 1)
+dev.off()
+
+png("~/Writing/Figures/NurseLarva/logFCfigures.png",width=4000,height=5000,res=600)
+grid.arrange(ctdev_lfc_plot+theme_bw(),
+             ctdev_onelarv_lfc_plot+theme_bw(),
+             ct_overall_plot_oneLarv+theme_bw(),ncol = 1)
+dev.off()
+
+png("~/Writing/Figures/NurseLarva/logFCfiguresSoc.png",width=4000,height=5000,res=600)
+grid.arrange(socPlotLFC+theme_bw())
+dev.off()
+############
+###Part 4: Caste/social toolkits as components of developmental toolkits
+############
+
+############
+###Part 5: Phylostrata of caste/social toolkits
+############
+
+############
+###Part 6: Function of caste/social toolkits
+############
 
 #################
 ##Defining caste toolkits
 #################
 
-#Add tissue_stage bit
-editFactor <- function(f){
-  f <- droplevels(f[f$stage!=1&f$stage!=2&f$caste!="male",]) #remove eggs and 1st instars as well as males
-  f$tissue_stage = as.factor(do.call(paste,c(f[,c(2,3)],list(sep="_"))))#Want to treat each larval stage separately, as well as each tissue of the adult stage. It's necessary to 
-  #do this because the model can't estimate the effect of stage and tissue independently, since there are only adult h/m/g and only larvae of stage 3-6
-  relev = levels(f$tissue_stage)
-  relev[6:8]=c("8_head","8_mesosoma","8_gaster") #intially alphabetical
-  f$tissue_stage = factor(f$tissue_stage,levels=relev)
-  return(f)
-}
 
-#Return list of genes that are DE for caste overall
-#Return both caste main effect and genes with a caste*stage effect
-speciesCaste <- function(d,f){
-  f = editFactor(f)
-  d <- d[,colnames(d) %in% f$sample]
-  design <- model.matrix(~caste+tissue_stage+colony+caste*tissue_stage,data=f) #Note that we are lumping virgin queens, as well as nurses & foragers
-  int <- EdgeR(d,design,12:18)
-  intGenes <- rownames(int)[int$FDR < FDR]
-  design <- model.matrix(~caste+tissue_stage+colony,data=f) #Note that we are lumping virgin queens, as well as nurses & foragers
-  caste <- EdgeR(d[!rownames(d) %in% intGenes,],design,2) #Remove genes that were found to have an interaction factor
-  casteGenes <- rownames(caste)[caste$FDR < FDR]
-  f = droplevels(f[factorA$tissue=="larva",])
-  design <- model.matrix(~caste+colony,data=f)
-  casteL <- EdgeR(d[,colnames(d) %in% f$sample],design,2)
-  casteLGenes <- rownames(casteL)[casteL$FDR < FDR]
-  return(list(main=list(genes=casteGenes,results=caste),int=list(genes=intGenes,results=int),
-              casteL = list(genes=casteLGenes,results=casteL)))
-}
 
 #Return meta-list of lists of genes that are DE at each stage for a single species
 speciesCasteStage <- function(d,f){
