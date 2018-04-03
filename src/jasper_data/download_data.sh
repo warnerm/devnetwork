@@ -3,8 +3,9 @@
 #SBATCH --export=ALL
 #SBATCH -t 10-00:00
 #SBATCH -n 1
-SRAKEY=cat samples_jasper.txt | awk '{{print $4}}' | sed '1d'
-for sra_key in SRAKEY:
+SRAKEY=`cat samples_jasper.txt | awk '{{print $4}}' | sed '1d' | tr -d ' '`
+echo $SRAKEY
+for sra_key in $SRAKEY:
 do
-	fastq-dump sra_key
+	fastq-dump $sra_key
 done

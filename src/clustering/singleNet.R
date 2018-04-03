@@ -8,7 +8,7 @@ makeCor <- function(species){
   tpm = tpm[rowSums(tpm) > 0,]
   tCor = cor(t(tpm))
   tCor = round(tCor,3)
-  write.csv(tCor[1:100,1:100],paste("~/Data/devnetwork/",species,"TESTpCor.csv",sep=""),row.names=FALSE)
+  write.csv(tCor[1:1000,1:1000],paste("~/Data/devnetwork/",species,"TESTpCor.csv",sep=""),row.names=FALSE)
   write.csv(tCor,paste("~/Data/devnetwork/",species,"pCor.csv",sep=""),row.names=FALSE)
   return(0)
 }

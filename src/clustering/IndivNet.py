@@ -3,7 +3,7 @@
 #SBATCH -p compute # partition (queue)
 #SBATCH --export=ALL
 #SBATCH -t 10-00:00
-#SBATCH -n 40
+#SBATCH -n 20
 
 #File takes in tpm values and constructs a network based on pearson correlations among genes
 #Finds a value for d, the threshold of pearson correlations, so that all genes are in a giant graph
@@ -41,7 +41,7 @@ def getTopGenes():
 def getRanks(i):
     d = df.iloc[i]
     s = sorted(range(len(d)), key = lambda k: -d[k])
-    return s
+    return s[1:11]
 
 #Add genes that are connected to the test gene
 def newGenes(genes,test,d):
@@ -127,8 +127,8 @@ def getNet(d):
 #Normalize fpkm using hyperbolic sine transformation
 def main(argv):
     #inputfile, outputfile = InOut(argv)
-    inputfile = "~/Data/devnetwork/beespCor.csv"
-    outputfile = "~/Data/devnetwork/beesOne.txt"
+    inputfile = "beesTESTpCor.csv"
+    outputfile = "beesOne.txt"
     print 's'
     #Start d at 10 just to guess, and go up or down based on whether or not it's a GiantGraph
     d = 10 #variable specifying number of genes each gene is connected to
@@ -139,8 +139,10 @@ def main(argv):
     df = abs(df) #Make networks based on magnitude of correlation ('unsigned')
     print 'here'
     Ranks = pd.DataFrame([getRanks(i) for i in range(df.shape[0])])
+    print Ranks
     print 'here'
     TopGenes = getTopGenes()
+    df = None
 
     Giant = True
     while Giant:
