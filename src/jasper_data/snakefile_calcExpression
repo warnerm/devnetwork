@@ -1,26 +1,28 @@
-REF = "ref/GCF_000002195.4_Amel_4.5_protein.faa"
+REF = "ref/GCF_000002195.4_Amel_4.5_genomic.fna"
 GFF = "ref/GCF_000002195.4_Amel_4.5_genomic.gff" #After removing everything after space from scaffolds
 
 SAMPLES, = glob_wildcards("fastq/{sample}_pass_1.fastq")
 
 THREADS = 20
 
-####################
-## RNA-seq counts
+
+rule all:
+	input: "out/counts.csv.gz", "out/fpkm.csv.gz"
+
 rule makeRsemReference:
-	output: "ref/Amel.1.ebwt"
-	shell: """grep "exon" {GFF} > ref/exon.gff; \
-		gffread ref/exon.gff -g {REF} -w ref/transcripts.fa ;\
-		cat ref/exon.gff | sed 's/.*gene=//' | sed 's/;.*transcript_id=/\t/' > ref/knownIsoforms.txt; \ 
-		rsem-prepare-reference --transcript-to-gene-map ref/knownIsoforms.txt ref/transcripts.fa ref/Amel ; \
-		rm ref/exons.gff ref/transcripts.fa ref/knownIsoforms.txt"""
+	output: "ref/Amel.seq"
+	shell: """grep "exon" {GFF} | grep "gene=" > ref/exon.gff; \
+	gffread ref/exon.gff -g {REF} -w ref/transcripts.fa ;\
+	grep ">" ref/transcripts.fa | tr -d ">" | sed 's/gene=//' | awk '{{print $2"\t"$1}}' > ref/knownIsoforms.txt; \
+	rsem-prepare-reference --bowtie --transcript-to-gene-map ref/knownIsoforms.txt ref/transcripts.fa ref/Amel; \
+	rm ref/exon.gff ref/transcripts.fa ref/knownIsoforms.txt"""
 
 rule rsemCalculateExpression:
 	input: left="fastq/{sample}_pass_1.fastq",
 			right="fastq/{sample}_pass_2.fastq",
-			db="../ref/Amel.1.ebwt"
-	output: "fastq/{sample}.genes.results"
-	shell: "rsem-calculate-expression -p {THREADS} --paired-end {input[0]} {input[1]} ref/Amel {wildcards.sample}; mv {wildcards.sample}.* rsem/"
+			db="ref/Amel.seq"
+	output: "rsem/{sample}.genes.results"
+	shell: "rsem-calculate-expression -p {THREADS} --paired-end {input[left]} {input[right]} ref/Amel {wildcards.sample}; mv {wildcards.sample}.* rsem/"
 
 #gather rsem results and make tables of counts and fpkm (samples in columns, genes in rows)
 rule collectRsem:
