@@ -41,7 +41,7 @@ def AddGenes(new_cluster,gene):
 
 
 #Take the first available gene and start making clusters based on it's top three connections, etc
-def makeSmallCluster(genes_remaining,clusters):
+def makeSmallCluster(genes_remaining):
     start_gene = genes_remaining[0]
     close_genes = np.array(Ranks.iloc[start_gene,:3])
     new_cluster = np.append(start_gene,close_genes)
@@ -51,24 +51,26 @@ def makeSmallCluster(genes_remaining,clusters):
 
     #Add to existing cluster if applicable
     if sum(gene in genes_remaining for gene in new_cluster) < len(new_cluster):
-        for i in range(len(clusters)):
-            if sum(gene in clusters[i] for gene in new_cluster) > 0:
-                clusters[len(clusters)] = np.append(new_cluster,clusters[i])
-                clusters[i] = [] #Remove old cluster
+        for i in range(1,clusterID):
+            genes_to_add = np.array(df.Gene[(df['Cluster']==i) & (df['Cluster']!=0)])
+
+            if sum([gene1 in new_cluster for gene1 in genes_to_add]) > 0:
+                  #Update to new cluster_id
+                  df.loc[genes_to_add,'Cluster']=clusterID
     else:
-        clusters.append([new_cluster])
+        df.loc[new_cluster,'Cluster']=clusterID
     genes_remaining = [gene for gene in genes_remaining if not gene in new_cluster]
-    return genes_remaining, clusters
+    return genes_remaining
 
 
 def ConstructInitialClusters():
+    global clusterID
     genes_remaining = np.array(range(Ranks.shape[0]))
-    clusters = [[] for x in range(1)]
-    #while len(genes_remaining) > 0:
-    genes_remaining,clusters = makeSmallCluster(genes_remaining,clusters)
-    genes_remaining,clusters = makeSmallCluster(genes_remaining,clusters)
-
-    return clusters
+    while len(genes_remaining) > 0:
+        genes_remaining = makeSmallCluster(genes_remaining)
+        print df
+        print genes_remaining
+        clusterID = clusterID + 1
 
 def main(argv):
     #inputfile, outputfile = InOut(argv)
@@ -79,14 +81,15 @@ def main(argv):
     start_d = 3 #Start building small graphs with connections of three genes at a time
 
     #Read in dataframe of pearson correlations
-    global df, Ranks, TopGenes,d
+    global df, Ranks, d
+    global clusterID
+    clusterID = 1 #Iterate as we make clusters
     df = pd.read_csv(inputfile)
     df = abs(df) #Make networks based on magnitude of correlation ('unsigned')
     Ranks = pd.DataFrame([getRanks(i) for i in range(df.shape[0])])
-    df = None
-
-    clusters = ConstructInitialClusters()
-    print clusters
+    df = pd.DataFrame(data={'Gene':range(Ranks.shape[0]),'Cluster':np.repeat(0,Ranks.shape[0])})
+    ConstructInitialClusters()
+    print df
 
     # Giant = False
     # d = start_d
