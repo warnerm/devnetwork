@@ -2,7 +2,7 @@
 #SBATCH -p compute # partition (queue)
 #SBATCH --export=ALL
 #SBATCH -t 10-00:00
-#SBATCH -n 1
+#SBATCH -n 5
 
 import pandas as pd 
 from subprocess import call
