@@ -9,7 +9,7 @@ def getRanks(i):
 
 #Returns the top three genes connected to the given gene
 def NextThreeGenes(new_cluster,gene):
-    close_genes = np.array(Ranks.iloc[gene, :3])
+    close_genes = np.array(Ranks.iloc[gene, :start_d])
     if sum(gene in new_cluster for gene in close_genes) == 3:
         return new_cluster, []
     else:
@@ -43,7 +43,7 @@ def AddGenes(new_cluster,gene):
 #Take the first available gene and start making clusters based on it's top three connections, etc
 def makeSmallCluster(genes_remaining):
     start_gene = genes_remaining[0]
-    close_genes = np.array(Ranks.iloc[start_gene,:3])
+    close_genes = np.array(Ranks.iloc[start_gene,:start_d])
     new_cluster = np.append(start_gene,close_genes)
     for gene in close_genes:
         #Add genes until the cluster can't get larger
@@ -68,11 +68,11 @@ def ConstructInitialClusters():
     while len(genes_remaining) > 0:
         genes_remaining = makeSmallCluster(genes_remaining)
         clusterID = clusterID + 1
-        print genes_remaining[len(genes_remaining)-1]
+        if len(genes_remaining) > 0: print genes_remaining[len(genes_remaining)-1]
 
 def main(argv):
     #inputfile, outputfile = InOut(argv)
-    inputfile = "~/Data/devnetwork/beesTESTpCor.csv"
+    inputfile = "~/Data/devnetwork/beeShortTestpCor.csv"
     outputfile = "~/Data/devnetwork/beesOne.txt"
 
     global start_d
