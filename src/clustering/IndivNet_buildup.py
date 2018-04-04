@@ -55,10 +55,9 @@ def makeSmallCluster(genes_remaining):
             genes_to_add = np.array(df.Gene[(df['Cluster']==i) & (df['Cluster']!=0)])
 
             if sum([gene1 in new_cluster for gene1 in genes_to_add]) > 0:
-                  #Update to new cluster_id
-                  df.loc[genes_to_add,'Cluster']=clusterID
-    else:
-        df.loc[new_cluster,'Cluster']=clusterID
+                df.loc[genes_to_add,'Cluster']=clusterID
+    #Update to new cluster ID
+    df.loc[new_cluster,'Cluster']=clusterID
     genes_remaining = [gene for gene in genes_remaining if not gene in new_cluster]
     return genes_remaining
 
@@ -68,17 +67,16 @@ def ConstructInitialClusters():
     genes_remaining = np.array(range(Ranks.shape[0]))
     while len(genes_remaining) > 0:
         genes_remaining = makeSmallCluster(genes_remaining)
-        print df
-        print genes_remaining
         clusterID = clusterID + 1
+        print genes_remaining[len(genes_remaining)-1]
 
 def main(argv):
     #inputfile, outputfile = InOut(argv)
-    inputfile = "~/Data/devnetwork/beeShortTestpCor.csv"
+    inputfile = "~/Data/devnetwork/beesTESTpCor.csv"
     outputfile = "~/Data/devnetwork/beesOne.txt"
 
     global start_d
-    start_d = 3 #Start building small graphs with connections of three genes at a time
+    start_d = 1 #Start building small graphs with connections of three genes at a time
 
     #Read in dataframe of pearson correlations
     global df, Ranks, d
