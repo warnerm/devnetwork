@@ -3,7 +3,7 @@ GFF = "ref/GCF_000002195.4_Amel_4.5_genomic.gff" #After removing everything afte
 
 SAMPLES, = glob_wildcards("fastq/{sample}_pass_1.fastq")
 
-THREADS = 20
+THREADS = 80
 
 
 rule all:
@@ -14,15 +14,17 @@ rule makeRsemReference:
 	shell: """grep "exon" {GFF} | grep "gene=" > ref/exon.gff; \
 	gffread ref/exon.gff -g {REF} -w ref/transcripts.fa ;\
 	grep ">" ref/transcripts.fa | tr -d ">" | sed 's/gene=//' | awk '{{print $2"\t"$1}}' > ref/knownIsoforms.txt; \
-	rsem-prepare-reference --bowtie --transcript-to-gene-map ref/knownIsoforms.txt ref/transcripts.fa ref/Amel; \
-	rm ref/exon.gff ref/transcripts.fa ref/knownIsoforms.txt"""
+	gffread {GFF} -T -o ref/my.gtf; \
+	grep "gene_id" ref/my.gtf > ref/my2.gtf; \
+	rsem-prepare-reference --star --gtf ref/my2.gtf --transcript-to-gene-map ref/knownIsoforms.txt {REF} ref/Amel; \
+	rm ref/exon.gff ref/transcripts.fa ref/knownIsoforms.txt ref/my.gtf ref/my2.gtf"""
 
 rule rsemCalculateExpression:
 	input: left="fastq/{sample}_pass_1.fastq",
 			right="fastq/{sample}_pass_2.fastq",
 			db="ref/Amel.seq"
 	output: "rsem/{sample}.genes.results"
-	shell: "rsem-calculate-expression -p {THREADS} --paired-end {input[left]} {input[right]} ref/Amel {wildcards.sample}; mv {wildcards.sample}.* rsem/"
+	shell: "rsem-calculate-expression -p {THREADS} --star --paired-end {input[left]} {input[right]} ref/Amel {wildcards.sample}; mv {wildcards.sample}.* rsem/"
 
 #gather rsem results and make tables of counts and fpkm (samples in columns, genes in rows)
 rule collectRsem:
