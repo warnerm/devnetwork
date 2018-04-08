@@ -1,11 +1,34 @@
+#!/usr/bin/python
+
+#SBATCH -p compute # partition (queue)
+#SBATCH --export=ALL
+#SBATCH -t 10-00:00
+#SBATCH -n 1
+
 import pandas as pd
 import numpy as np
+import sys, getopt
+
+def InOut(argv):
+    inputfile=''
+    outputfile = ''
+    try:
+        opts, args = getopt.getopt(argv,"hi:o:",["ifile=","ofile="])
+    except getopt.GetoptError:
+        print 'IndivNet_buildup.py -i <inputfile> -o <outputfile>'
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt in ("-i","--ifile"):
+            inputfile = arg
+        elif opt in ("-o","--ofile"):
+            outputfile = arg
+    return inputfile, outputfile
 
 #Get ranks for each gene
 def getRanks(i):
     d = df.iloc[i]
     s = sorted(range(len(d)), key = lambda k: -d[k])
-    return s[1:11] #First value is the index
+    return s[1:100] #First value is the index
 
 #Returns the top three genes connected to the given gene
 def NextThreeGenes(new_cluster,gene):
@@ -68,12 +91,55 @@ def ConstructInitialClusters():
     while len(genes_remaining) > 0:
         genes_remaining = makeSmallCluster(genes_remaining)
         clusterID = clusterID + 1
-        if len(genes_remaining) > 0: print genes_remaining[len(genes_remaining)-1]
+
+def CombineClusters():
+    global clusterID
+
+    #Eventually will update all clusters
+    clusters_remaining = np.unique(df['Cluster'])
+    while len(clusters_remaining) > 0:
+        current = clusters_remaining[0]
+
+        #Remove cluster form list
+        clusters_remaining = np.delete(clusters_remaining,0)
+
+        #Find genes in the cluster
+        current_genes = np.array(df.Gene[df['Cluster']==current])
+        # print current_genes
+        # print d
+        # print Ranks.iloc[current_genes,(d-1)]
+        #Find the genes reached by incrementing d
+        next_genes = np.unique(np.array(Ranks.iloc[current_genes,(d-1)]))
+        new_cluster = np.unique(np.append(current_genes,next_genes))
+
+        #Check if new genes are added
+        if (len(new_cluster) > len(current_genes)):
+            # scan remaining clusters for where those genes are
+            for cluster in clusters_remaining:
+
+                # Returns yes if they overlap
+                if sum([gene in df.Gene[df['Cluster'] == cluster] for gene in next_genes]):
+                    new_cluster = np.append(new_cluster, df.Gene[df['Cluster'] == cluster])
+
+                    # Remove cluster from list
+                    clusters_remaining = [clust for clust in clusters_remaining if clust != cluster]
+
+            # Edit gene cluster ID
+            df.loc[new_cluster, 'Cluster'] = clusterID
+            clusters_remaining = np.append(clusterID,clusterID)
+            clusterID = clusterID + 1
+
+    #Check if giant graph
+    if len(np.unique(df['Cluster'])) == 1:
+        return True
+
+    else:
+        return False
 
 def main(argv):
-    #inputfile, outputfile = InOut(argv)
-    inputfile = "~/Data/devnetwork/beeShortTestpCor.csv"
-    outputfile = "~/Data/devnetwork/beesOne.txt"
+    inputfile, outputfile = InOut(argv)
+    # inputfile = "~/Data/devnetwork/antsTESTpCor.csv"
+    # outputfile = "~/Data/devnetwork/antTest.txt"
 
     global start_d
     start_d = 1 #Start building small graphs with connections of three genes at a time
@@ -87,19 +153,25 @@ def main(argv):
     Ranks = pd.DataFrame([getRanks(i) for i in range(df.shape[0])])
     df = pd.DataFrame(data={'Gene':range(Ranks.shape[0]),'Cluster':np.repeat(0,Ranks.shape[0])})
     ConstructInitialClusters()
-    print df
 
-    # Giant = False
-    # d = start_d
-    # while not Giant:
-    #     d = d+1
-    #     CombineClusters() #Use the extra connection to combine clusters
-    #     Giant = CheckGiant() #Check if the graph is giant
+    Giant = False
+    d = start_d
+    while not Giant:
+        d = d+1
 
-    # #Get the network two steps ago
-    # net = getNet(d+2)
-    # print "final" + str(d+2)
-    # net.to_csv(outputfile,sep="\t",index=None,header=False)
+        #Add a new connection to each gene and check if it forms a giant graph
+        Giant = CombineClusters()
+
+    #From calculated d, return the network
+    results = {}
+    for gene in range(Ranks.shape[0]):
+        results[gene] = pd.DataFrame(data = {'Gene1':np.repeat(gene,d),'Gene2':Ranks.iloc[gene,:d]})
+
+    network = pd.concat(results)
+
+    print "final d = " + str(d)
+    network.to_csv(outputfile,sep="\t",index=None,header=False)
 
 if __name__ == "__main__":
-    main("2")
+    main(sys.argv[1:])
+    #main("2")
