@@ -96,7 +96,7 @@ def CombineClusters():
     global clusterID
 
     #Eventually will update all clusters
-    clusters_remaining = np.unique(df['Cluster'])
+    clusters_remaining = np.unique(df.Cluster[df['Cluster']!=0])
     while len(clusters_remaining) > 0:
         current = clusters_remaining[0]
 
@@ -118,7 +118,7 @@ def CombineClusters():
             for cluster in clusters_remaining:
 
                 # Returns yes if they overlap
-                if sum([gene in df.Gene[df['Cluster'] == cluster] for gene in next_genes]):
+                if sum([gene in df.Gene[df['Cluster'] == cluster] for gene in next_genes]) > 0:
                     new_cluster = np.append(new_cluster, df.Gene[df['Cluster'] == cluster])
 
                     # Remove cluster from list
@@ -142,7 +142,7 @@ def main(argv):
     # outputfile = "~/Data/devnetwork/antTest.txt"
 
     global start_d
-    start_d = 1 #Start building small graphs with connections of three genes at a time
+    start_d = 3 #Start building small graphs with connections of three genes at a time
 
     #Read in dataframe of pearson correlations
     global df, Ranks, d
