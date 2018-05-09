@@ -30,5 +30,7 @@ rule rsemCalculateExpression:
 rule collectRsem:
 	input: expand("rsem/{sample}.genes.results", sample=SAMPLES)
 	output: "out/counts.csv.gz", "out/fpkm.csv.gz"
-	shell: "python collect_counts.py genes data/rsem/ | gzip > {output[0]}; \
-	python2.7 collect_fpkm.py genes data/rsem/ | gzip > {output[1]}"
+	shell: "python2.7 collect_counts.py genes rsem/ | gzip > {output[0]}; \
+	python2.7 collect_fpkm.py genes rsem/ | gzip > {output[1]}"
+
+grep "exon" GCA_000611955.2_Stegodyphus_mimosarum_v1_genomic.gff | grep "gene=" > ref/exon.gff

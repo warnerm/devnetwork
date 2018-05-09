@@ -15,3 +15,17 @@ makeCor <- function(species){
 
 makeCor("bees")
 makeCor("ants")
+
+###Prepare data for OrthoClust
+prepOrthoClust <- function(species,d){
+  df <- read.csv(paste("~/Data/devnetwork/",species,"TESTpCor.csv",sep=""))
+  df = abs(df)
+  ranks <- apply(df,1,order,decreasing=TRUE)
+  input_df <- ranks[2:(d+1),]
+  input <- matrix(ncol=2)
+  for (i in 1:nrow(input_df)){
+    for (j in 1:ncol(input_df)){
+      input <- rbind(input,c(j,input_df[i,j])) #Column is the actual value of the gene, row is 
+    }
+  }
+}

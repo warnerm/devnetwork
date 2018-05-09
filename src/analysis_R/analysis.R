@@ -4,6 +4,25 @@ library(gridExtra)
 library(reshape2)
 library(ggplot2)
 
+main_theme=theme_bw()+
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        panel.border = element_rect(size = 1, color = "black",fill = NA),
+        text=element_text(family='Arial'),
+        axis.text = element_text(size=16),
+        axis.title = element_text(size = 22,face="bold"),
+        plot.title = element_text(hjust = 0.5,size=25,face = "bold"),
+        legend.text = element_text(size=16),
+        legend.title = element_text(size = 22))
+
+theme(axis.text = element_text(size=16),
+      axis.text.x = element_text(angle = -45,hjust=0),
+      axis.title = element_text(size = 22,face="bold"),
+      plot.title = element_text(hjust = 0.5,size=25,face = "bold"),
+      panel.border = element_rect(size = 1, color = "black",fill = NA),
+      plot.margin = unit(c(1,2,1,1),"cm")) 
+
 #Constants
 FDR = 0.05
 
@@ -153,7 +172,13 @@ antT <- modifyDF(antT)
 ogg2 <- read.csv("~/GitHub/devnetwork/data/HymOGG_hym.csv",sep=" ")
 t = table(ogg2$OGG)
 t = t[t==1]
-ogg11 = ogg2[ogg2$OGG %in% names(t),] #get 1-1 orthologs
+oggFilt = ogg2[ogg2$OGG %in% names(t),] #get 1-1 orthologs
+b = table(oggFilt$gene_Amel)
+b = b[b==1]
+oggFilt = oggFilt[oggFilt$gene_Amel %in% names(b),]
+a = table(oggFilt$gene_Mphar)
+a = a[a==1]
+ogg11 = oggFilt[oggFilt$gene_Mphar %in% names(a),]
 
 #Generate dataframe of ant and bee expression for each OGG
 orthoExpr <- getOrthoExpr(bee,ant)
@@ -173,13 +198,13 @@ speciesCasteDE <- function(d,f,factorFun){
   f = factorFun(f)
   d <- d[,colnames(d) %in% f$sample]
   design <- model.matrix(~caste+tissue_stage+colony+caste*tissue_stage,data=f) #Note that we are lumping virgin queens, as well as nurses & foragers
-  int <- EdgeR_QL(d,design,(4+length(levels(f$tissue_stage))):(2+length(levels(f$tissue_stage))*2)) 
+  int <- EdgeR(d,design,(4+length(levels(f$tissue_stage))):(2+length(levels(f$tissue_stage))*2)) 
   genesInt <- rownames(int)[int$FDR < FDR]
   design <- model.matrix(~caste+tissue_stage+colony,data=f) 
-  caste <- EdgeR_QL(d,design,2) 
+  caste <- EdgeR(d,design,2) 
   genesDE <- rownames(caste)[caste$FDR < FDR]
   design <- model.matrix(~caste+tissue_stage+colony,data=f) 
-  caste2 <- EdgeR_QL(d[!rownames(d) %in% genesInt,],design,2)  #Remove genes with a significant interaction factor
+  caste2 <- EdgeR(d[!rownames(d) %in% genesInt,],design,2)  #Remove genes with a significant interaction factor
   genesDE_noInt <- rownames(caste2)[caste2$FDR < FDR]
   return(list(genesDE,genesInt,genesDE_noInt,caste,caste2))
 }
@@ -193,7 +218,7 @@ speciesCasteStage <- function(d,f,factorFun){
     fs = droplevels(f[grepl(as.character(lev),f$tissue_stage),])
     ds <- d[,colnames(d) %in% rownames(fs)]
     design <- model.matrix(~caste,data=fs) #bee L4 only came from 1 colony
-    caste <- EdgeR_QL(ds,design,2)
+    caste <- EdgeR(ds,design,2)
     results[[lev]]=list(genes=rownames(caste)[caste$FDR<0.05],results=caste)
   }
   return(results)
@@ -223,6 +248,173 @@ beeTests_oneLarv = speciesDEtests(bee,factorB,editFactor_oneLarv)
 antTests = speciesDEtests(ant,factorA,editFactor)
 antTests_oneLarv = speciesDEtests(ant,factorA,editFactor_oneLarv)
 
+collapseLogFC <- function(resList){
+  d1 = d2 = data.frame(Gene = rownames(resList[[1]][[2]]))
+  d1$L2 = resList[[1]][[2]]$logFC
+  d2$L2 = resList[[1]][[2]]$FDR
+  for (i in 2:length(resList)){
+    dN = resList[[i]][[2]]
+    dN$Gene = rownames(dN)
+    colnames(dN)[c(1,5)] = rep(names(resList)[i],2)
+    d1 = merge(d1,dN[,c(1,6)],by = "Gene")
+    d2 = merge(d2,dN[,c(5,6)],by = "Gene")
+  }
+  return(list(d1,d2))
+}
+
+DE_direction <- function(data){
+  d = data.frame(Gene = data[[1]]$Gene)
+  for (i in 2:ncol(data[[1]])){
+    d[,i]  = "nonDE"
+    d[,i][data[[1]][,i] > 0 & data[[2]][,i] < 0.05] = "worker"
+    d[,i][data[[1]][,i] < 0 & data[[2]][,i] < 0.05] = "queen"
+  }
+  colnames(d) = colnames(data[[1]])
+  return(d)
+}
+
+antRes = collapseLogFC(antTests[[2]])
+antDE = DE_direction(antRes)
+beeRes = collapseLogFC(beeTests[[2]])
+beeDE = DE_direction(beeRes)
+
+DEheatmap <- function(dfDE,species){
+  dfDE$numQueen = apply(dfDE[,c(2:ncol(dfDE))],1,function(x) sum(x == "queen"))
+  dfDE$numWorker = apply(dfDE[,c(2:ncol(dfDE))],1,function(x) sum(x == "worker"))
+  d = table(dfDE$numQueen,dfDE$numWorker)
+  m = melt(d)
+  colnames(m)[c(1,2)] = c("QB","WB")
+  p <- ggplot(m,aes(x=QB,y=WB))+
+    geom_tile(aes(fill = value))+
+    scale_fill_gradient(name = "count",trans = "log",
+                        breaks = c(1,10,100,1000,10000),
+                        labels = c(1,10,100,1000,10000))+
+    geom_text(aes(x = QB,y = WB,label = value),color="white")+
+    apatheme+
+    scale_y_continuous(name = "number of times worker-biased",
+                       breaks  = seq(0,max(m$WB)),
+                       expand = c(0,0))+
+    scale_x_continuous(name = "number of times queen-biased",
+                       breaks = seq(0,max(m$QB)),
+                       expand = c(0,0))+
+    ggtitle(species)+
+    theme(legend.position = "right",
+          axis.line=element_line(color="black"),
+          axis.text = element_text(size=16),
+          axis.title = element_text(size = 22,face="bold"),
+          plot.title = element_text(hjust = 0.5,size=25,face = "bold"),
+          panel.border = element_rect(size = 1, color = "black",fill = NA)) 
+  return(p)
+}
+
+logFCheatmap <- function(dfDE,species){
+  dfDE$numQueen = apply(dfDE[,c(2:ncol(dfDE))],1,function(x) sum(x < 0))
+  dfDE$numWorker = apply(dfDE[,c(2:ncol(dfDE))],1,function(x) sum(x > 0))
+  d = table(dfDE$numQueen,dfDE$numWorker)
+  m = melt(d)
+  colnames(m)[c(1,2)] = c("QB","WB")
+  p <- ggplot(m,aes(x=QB,y=WB))+
+    geom_tile(aes(fill = value))+
+    scale_fill_gradient(name = "count",trans = "log",
+                        breaks = c(1,10,100,1000,10000),
+                        labels = c(1,10,100,1000,10000))+
+    geom_text(aes(x = QB,y = WB,label = value),color="white")+
+    apatheme+
+    scale_y_continuous(name = "number of times worker-biased",
+                       breaks  = seq(0,max(m$WB)),
+                       expand = c(0,0))+
+    scale_x_continuous(name = "number of times queen-biased",
+                       breaks = seq(0,max(m$QB)),
+                       expand = c(0,0))+
+    ggtitle(species)+
+    theme(legend.position = "right",
+          axis.line=element_line(color="black"),
+          axis.text = element_text(size=16),
+          axis.title = element_text(size = 22,face="bold"),
+          plot.title = element_text(hjust = 0.5,size=25,face = "bold"),
+          panel.border = element_rect(size = 1, color = "black",fill = NA)) 
+  return(p)
+}
+
+#Result 1: Caste-bias changes across development
+png("~/GitHub/devnetwork/figures/AntDEnums.png",width=2000,height=2000,res=300)
+DEheatmap(antDE,"ant")
+dev.off()
+
+png("~/GitHub/devnetwork/figures/BeeDEnums.png",width=2000,height=2000,res=300)
+DEheatmap(beeDE,"bee")
+dev.off()
+
+png("~/GitHub/devnetwork/figures/AntLFC.png",width=2000,height=2000,res=300)
+logFCheatmap(antRes[[1]],"ant")
+dev.off()
+
+png("~/GitHub/devnetwork/figures/BeeLFC.png",width=2000,height=2000,res=300)
+logFCheatmap(beeRes[[1]],"bee")
+dev.off()
+
+#Correlation of log fold change at each stage
+lfcCor <- function(antD,beeD){
+  nStage = ncol(antD) - 1 
+  antD <- merge(antD,ogg11,by.x = "Gene",by.y = "gene_Mphar")
+  beeD <- merge(beeD,ogg11,by.x = "Gene",by.y = "gene_Amel")
+  antD = antD[antD$OGG %in% beeD$OGG,]
+  beeD = beeD[beeD$OGG %in% antD$OGG,]
+  antD = antD[order(antD$OGG),]
+  beeD = beeD[order(beeD$OGG),]
+  d = data.frame(stage = colnames(antD)[c(2:(nStage+1))])
+  dAbs = data.frame(stage = colnames(antD)[c(2:(nStage+1))])
+  for (i in 1:nStage){
+    t = cor.test(antD[,i+1],beeD[,i+1])
+    d[i,2] = t$estimate
+    d[i,3] = t$conf.int[1]
+    d[i,4] = t$conf.int[2]
+    t = cor.test(abs(antD[,i+1]),abs(beeD[,i+1]))
+    dAbs[i,2] = t$estimate
+    dAbs[i,3] = t$conf.int[1]
+    dAbs[i,4] = t$conf.int[2]
+  }
+  colnames(d) = colnames(dAbs) = c("Stage","cor","c1","c2")
+  return(list(d,dAbs))
+}
+
+d = lfcCor(antRes[[1]],beeRes[[1]])
+d[[1]]$Stage=d[[2]]$Stage = c("L2","L3","L4","L5","Pupa","Adult_Head","Adult_Mesosoma","Adult_Abdomen")
+d[[1]]$Stage = d[[2]]$Stage = factor(d[[1]]$Stage,levels=d[[1]]$Stage)
+
+
+png("~/GitHub/devnetwork/figures/lfcSigned.png",width=2000,height=2000,res=300)
+ggplot(d[[1]],aes(x = Stage, y = cor))+
+  geom_bar(stat = "identity")+
+  geom_errorbar(aes(ymin=c1,ymax=c2),width = 0.2)+
+  ylab("pearson correlation")+
+  xlab("stage/tissue")+
+  ggtitle("signed correlation")+
+  apatheme+
+  theme(axis.text = element_text(size=16),
+        axis.text.x = element_text(angle = -45,hjust=0),
+        axis.title = element_text(size = 22,face="bold"),
+        plot.title = element_text(hjust = 0.5,size=25,face = "bold"),
+        panel.border = element_rect(size = 1, color = "black",fill = NA),
+        plot.margin = unit(c(1,2,1,1),"cm"))
+dev.off()
+
+png("~/GitHub/devnetwork/figures/lfcAbs.png",width=2000,height=2000,res=300)
+ggplot(d[[2]],aes(x = Stage, y = cor))+
+  geom_bar(stat = "identity")+
+  geom_errorbar(aes(ymin=c1,ymax=c2),width = 0.2)+
+  ylab("pearson correlation")+
+  xlab("stage/tissue")+
+  ggtitle("unsigned (magnitude) correlation")+
+  apatheme+
+  theme(axis.text = element_text(size=16),
+        axis.text.x = element_text(angle = -45,hjust=0),
+        axis.title = element_text(size = 22,face="bold"),
+        plot.title = element_text(hjust = 0.5,size=25,face = "bold"),
+        panel.border = element_rect(size = 1, color = "black",fill = NA),
+        plot.margin = unit(c(1,2,1,1),"cm")) 
+dev.off()
+
 #Finding: There are no "consistent" DE
 nGenes_consistentlyDE <- lapply(list(beeTests,beeTests_oneLarv,antTests,antTests_oneLarv),function(x){
   lapply(c(1,2,3),function(j) length(x[[3]][[j]]))
@@ -251,6 +443,264 @@ speciesSocial <- function(d,f){
 
 beeSocial <- speciesSocial(bee,factorB)
 antSocial <- speciesSocial(ant,factorA)
+
+antSocRes = collapseLogFC(antSocial)
+antDESoc = DE_direction(antSocRes) #Note that "queen" genes are forager genes (just re-using function)
+beeSocRes = collapseLogFC(beeSocial)
+beeDESoc = DE_direction(beeSocRes)
+
+d = lfcCor(antSocRes[[1]],beeSocRes[[1]])
+d[[1]]$Stage=d[[2]]$Stage=c("head","mesosoma","abdomen")
+d[[1]]$Stage = d[[2]]$Stage = factor(d[[1]]$Stage,levels=d[[1]]$Stage)
+
+png("~/GitHub/devnetwork/figures/NF_DEs_ant.png",width=2000,height=2000,res=300)
+DEheatmap(antDESoc,"ant")+
+  scale_y_continuous(name = "number tissues nurse-biased",expand = c(0,0))+
+  scale_x_continuous(name = "number tissues forager-biased",expand = c(0,0))
+dev.off()
+
+png("~/GitHub/devnetwork/figures/NF_DEs_bee.png",width=2000,height=2000,res=300)
+DEheatmap(beeDESoc,"bee")+
+  scale_y_continuous(name = "number tissues nurse-biased",expand = c(0,0))+
+  scale_x_continuous(name = "number tissues forager-biased",expand = c(0,0))
+dev.off()
+
+png("~/GitHub/devnetwork/figures/lfcSigned_NF.png",width=2000,height=2000,res=300)
+ggplot(d[[1]],aes(x = Stage, y = cor))+
+  geom_bar(stat = "identity")+
+  geom_errorbar(aes(ymin=c1,ymax=c2),width = 0.2)+
+  ylab("pearson correlation")+
+  xlab("tissue")+
+  ggtitle("signed correlation")+
+  apatheme+
+  theme(axis.text = element_text(size=16),
+        axis.text.x = element_text(angle = -45,hjust=0),
+        axis.title = element_text(size = 22,face="bold"),
+        plot.title = element_text(hjust = 0.5,size=25,face = "bold"),
+        panel.border = element_rect(size = 1, color = "black",fill = NA),
+        plot.margin = unit(c(1,2,1,1),"cm"))
+dev.off()
+
+png("~/GitHub/devnetwork/figures/lfcAbs_NF.png",width=2000,height=2000,res=300)
+ggplot(d[[2]],aes(x = Stage, y = cor))+
+  geom_bar(stat = "identity")+
+  geom_errorbar(aes(ymin=c1,ymax=c2),width = 0.2)+
+  ylab("pearson correlation")+
+  xlab("tissue")+
+  ggtitle("unsigned (magnitude) correlation")+
+  apatheme+
+  theme(axis.text = element_text(size=16),
+        axis.text.x = element_text(angle = -45,hjust=0),
+        axis.title = element_text(size = 22,face="bold"),
+        plot.title = element_text(hjust = 0.5,size=25,face = "bold"),
+        panel.border = element_rect(size = 1, color = "black",fill = NA),
+        plot.margin = unit(c(1,2,1,1),"cm")) 
+dev.off()
+
+##Developmental genes
+casteDev <- function(fdr,caste,data,factors){
+  counts <- data[,(factors$tissue=="larva"|factors$tissue=="egg") & factors$caste==caste]
+  f = droplevels(factors[factors$sample %in% colnames(counts),])
+  design <- model.matrix(~stage+colony,data=f)
+  out <- EdgeR(counts,design,2:length(levels(f$stage)))
+  return(rownames(out)[out$FDR < fdr])
+}
+
+genDevTool <- function(fdr,factors,data){
+  fQueen <- factors[factors$stage==1|factors$stage==2,]
+  fQueen$caste="queen"
+  fQueen$sample=paste(fQueen$sample,"_QueenCopy",sep="")
+  rownames(fQueen)=fQueen$sample
+  factors <- rbind(factors,fQueen) #Add copies of egg and L1 samples for dev toolkit definition
+  dataQ <- data[,grepl("L1|_E",colnames(data))]
+  colnames(dataQ)=paste(colnames(dataQ),"_QueenCopy",sep="")
+  data <- cbind(data,dataQ)#Add copies of egg and L1 samples for dev toolkit definition
+  QGenes <- casteDev(fdr,"queen",data,factors)
+  WGenes <- casteDev(fdr,"worker",data,factors)
+  return(QGenes[QGenes %in% WGenes]) #return genes that are differentially expressed across stages in queens and workers
+}
+
+fdr = 0.05
+BeeDev <- genDevTool(fdr,factorB,bee)
+AntDev <- genDevTool(fdr,factorA,ant)
+
+BeeDevOGG <- ogg11$OGG[ogg11$gene_Amel %in% BeeDev]
+AntDevOGG <- ogg11$OGG[ogg11$gene_Mphar %in% AntDev]
+TwoSpecDev = BeeDevOGG[BeeDevOGG %in% AntDevOGG]
+oggDev = ogg11
+oggDev$DevApis = oggDev$DevMphar = 0
+oggDev$DevApis[oggDev$OGG %in% BeeDevOGG] = 1
+oggDev$DevMphar[oggDev$OGG %in% AntDevOGG] = 1
+
+ant_conservedDev = oggDev$gene_Mphar[oggDev$DevApis+oggDev$DevMphar==2]
+bee_conservedDev = oggDev$gene_Amel[oggDev$DevApis+oggDev$DevMphar==2]
+
+ant_dev_withOGG = ogg11$gene_Mphar[ogg11$gene_Mphar %in% AntDev]
+bee_dev_withOGG = ogg11$gene_Amel[ogg11$gene_Amel %in% BeeDev]
+
+x <- vennCounts(oggDev[,c("DevApis","DevMphar")])
+
+png("~/GitHub/devnetwork/figures/DevelomentalOverlap.png")
+vennDiagram(x,names = c("Apis","Mphar"))
+dev.off()
+
+t = rbind(c(820,1484),c(1087,3334))
+chisq.test(t) #Highly significant
+
+bootCI <- function(v,boots){
+  v = v[!is.na(v)]
+  bV = unlist(lapply(seq(1,boots),function(x){
+    mean(v[sample(x = seq(1,length(v)),size = length(v),replace=TRUE)])
+  }))
+  c1 = quantile(bV, 0.025)
+  c2 = quantile(bV, 0.975)
+  m = mean(v)
+  return(data.frame(mean = m, c1 = c1, c2 = c2))
+}
+
+#Following Schrader et al 2016, use a euclidian distance metric to assess caste bias
+cb_pirate <- function(data,dev,species){
+  data$caste_bias = apply(data[,c(2:ncol(data))],1,function(x) sqrt(sum(x^2)))
+  data$DevGene = "non-developmental"
+  data$DevGene[data$Gene %in% dev] = "developmental"
+  data$DevGene = factor(data$DevGene,levels = c("non-developmental","developmental"))
+  sum = ldply(lapply(levels(data$DevGene),function(x) bootCI(data$caste_bias[data$DevGene==x],10000)))
+  sum$DevGene = factor(levels(data$DevGene),levels = levels(data$DevGene))
+  p1 <- ggplot(data = sum, aes(x = DevGene, y = mean))+
+    geom_violin(data = data,aes(x = DevGene, y = caste_bias))+
+    geom_boxplot(data=data,aes(x=DevGene,y=caste_bias),width=0.1,outlier.shape=NA)+
+    #geom_jitter(data = data, aes(x = DevGene, y = caste_bias), shape = 1, width = .05,alpha = 0.2)+
+    #geom_point(size = 3)+
+    #geom_errorbar(aes(ymax = c2, ymin = c1),width = 0.2)+
+    main_theme+
+    ggtitle(species)+
+    ylab("total caste bias")+
+    annotate("text",x = 1.5,y = max(data$caste_bias)*0.9,label="***",size = 10)+
+    xlab("")
+  return(p1)
+}
+
+cb_pirate2 <- function(data,dev,conserved_dev,species){
+  data$caste_bias = apply(data[,c(2:ncol(data))],1,function(x) sqrt(sum(x^2)))
+  data$DevGene = "non-developmental"
+  data$DevGene[data$Gene %in% dev] = "developmental"
+  data$DevGene[data$Gene %in% conserved_dev] = "conserved-devel"
+  data$DevGene = factor(data$DevGene,levels = c("non-developmental","developmental","conserved-devel"))
+  sum = ldply(lapply(levels(data$DevGene),function(x) bootCI(data$caste_bias[data$DevGene==x],10000)))
+  sum$DevGene = factor(levels(data$DevGene),levels = levels(data$DevGene))
+  p1 <- ggplot(data = sum, aes(x = DevGene, y = mean))+
+    geom_violin(data = data,aes(x = DevGene, y = caste_bias))+
+    geom_boxplot(data=data,aes(x=DevGene,y=caste_bias),width=0.1,outlier.shape=NA)+
+    #geom_jitter(data = data, aes(x = DevGene, y = caste_bias), shape = 1, width = .05,alpha = 0.2)+
+    #geom_point(size = 3)+
+    #geom_errorbar(aes(ymax = c2, ymin = c1),width = 0.2)+
+    main_theme+
+    ggtitle(species)+
+    ylab("total caste bias")+
+    #annotate("text",x = 1.5,y = max(data$caste_bias)*0.9,label="***",size = 10)+
+    xlab("")
+  return(list(p1,data))
+}
+
+cb_pirate3 <- function(data,dev,dev_OGG,conserved_dev,species){
+  data$caste_bias = apply(data[,c(2:ncol(data))],1,function(x) sqrt(sum(x^2)))
+  data$DevGene = "non-developmental"
+  data$DevGene[data$Gene %in% dev] = "developmental-noOGG"
+  data$DevGene[data$Gene %in% dev_OGG] = "developmental-OGG"
+  data$DevGene[data$Gene %in% conserved_dev] = "conserved-developmental"
+  data$DevGene = factor(data$DevGene,levels = c("non-developmental","developmental-noOGG","developmental-OGG","conserved-developmental"))
+  sum = ldply(lapply(levels(data$DevGene),function(x) bootCI(data$caste_bias[data$DevGene==x],10000)))
+  sum$DevGene = factor(levels(data$DevGene),levels = levels(data$DevGene))
+  p1 <- ggplot(data = sum, aes(x = DevGene, y = mean))+
+    geom_violin(data = data,aes(x = DevGene, y = caste_bias))+
+    geom_boxplot(data=data,aes(x=DevGene,y=caste_bias),width=0.1,outlier.shape=NA)+
+    #geom_jitter(data = data, aes(x = DevGene, y = caste_bias), shape = 1, width = .05,alpha = 0.2)+
+    #geom_point(size = 3)+
+    #geom_errorbar(aes(ymax = c2, ymin = c1),width = 0.2)+
+    main_theme+
+    ggtitle(species)+
+    ylab("total caste bias")+
+    #annotate("text",x = 1.5,y = max(data$caste_bias)*0.9,label="***",size = 10)+
+    xlab("")
+  return(list(p1,data))
+}
+
+
+png("~/GitHub/devnetwork/figures/devel_caste_ant.png",width=2000,height=2000,res=300)
+cb_pirate(antRes[[1]],AntDev,"ant")
+dev.off()
+
+png("~/GitHub/devnetwork/figures/devel_caste_bee.png",width=2000,height=2000,res=300)
+cb_pirate(beeRes[[1]],BeeDev,"bee")
+dev.off()
+
+png("~/GitHub/devnetwork/figures/devel_social_ant.png",width=2000,height=2000,res=300)
+cb_pirate(antSocRes[[1]],AntDev,"ant")+ylab("total nurse/forager bias")
+dev.off()
+
+png("~/GitHub/devnetwork/figures/devel_social_bee.png",width=2000,height=2000,res=300)
+cb_pirate(beeSocRes[[1]],BeeDev,"bee")+ylab("total nurse/forager bias")
+dev.off()
+
+p1 <- cb_pirate2(antRes[[1]],AntDev,ant_conservedDev,"ant")
+p1 <- cb_pirate2(beeRes[[1]],BeeDev,bee_conservedDev,"bee")
+
+p1 <- cb_pirate3(beeRes[[1]],BeeDev,bee_dev_withOGG,bee_conservedDev,"bee")
+data = p1[[2]]
+wilcox.test(data$caste_bias[data$DevGene=="non-developmental"],data$caste_bias[data$DevGene=="developmental-OGG"],alternative="less")
+
+
+p2 <- cb_pirate3(antRes[[1]],AntDev,ant_dev_withOGG,ant_conservedDev,"ant")
+
+ext <- read.csv("~/Downloads/msx123_Supp (1)/MpharAnn.csv") #load in MBE results
+ext$BeeOGG = 0
+ext$BeeOGG[ext$Gene %in% ogg11$gene_Mphar] = 1
+e = ext[,c(1:3,25,27,28)]
+
+wilcox.test(data$caste_bias[data$DevGene=="conserved-devel"],data$caste_bias[data$DevGene=="developmental"],alternative="less")
+
+#########
+##Calculating coefficient of variation
+#########
+
+
+
+
+vennAdult <- function(data,dev){
+  d2 = data
+  d2[d2=="nonDE"]=0
+  d2[d2=="queen"|d2=="worker"]=1
+  for (i in 2:4) d2[,i] = as.numeric(d2[,i])
+  d2$DevDE = 0
+  d2$DevDE[d2$Gene %in% dev] = 1
+  x <- vennCounts(d2[,c(2:5)])
+  p <- vennDiagram(x,names = c("head","mesosoma","abdomen","developmental"))
+  return(p)
+}
+
+vennAdult(antDE[,c(1,7:9)],AntDev)
+vennAdult(beeDE[,c(1,7:9)],BeeDev)
+vennAdult(antDESoc,AntDev)
+vennAdult(beeDESoc,BeeDev)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #Shared social toolkit
 sharedGene <- function(b,a){
