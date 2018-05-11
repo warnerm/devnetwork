@@ -662,9 +662,184 @@ wilcox.test(data$caste_bias[data$DevGene=="conserved-devel"],data$caste_bias[dat
 #########
 ##Calculating coefficient of variation
 #########
+factorA$meta = as.factor(apply(factorA[,c(2:6)],1,paste,collapse='_'))
+factorB$meta = as.factor(apply(factorB[,c(2:6)],1,paste,collapse='_'))
+
+getCV <- function(lev,factor,tpm){
+  if (sum(factor$meta==lev)<2){
+    return(rep(0,nrow(tpm)))
+  }
+  samples = factor$sample[factor$meta==lev]
+  df = tpm[,samples]
+  cv = apply(df,1,function(x) sd(x)/mean(x))
+  return(cv)
+}
+
+averageCV <- function(factor,tpm){
+  allCv = lapply(levels(factor$meta),function(x) getCV(x,factor,tpm))
+  a = as.data.frame(do.call(cbind,allCv))
+  names(a) = levels(factor$meta)
+  meanCv = apply(a,1,function(x) mean(x,na.rm=TRUE))
+  return(list(meanCv,a))
+}
+
+antCV = averageCV(factorA,antT)
+beeCV = averageCV(factorB,beeT)
+
+cb_cv <- function(data,cv,species){
+  data$caste_bias = apply(data[,c(2:ncol(data))],1,function(x) sqrt(sum(x^2)))
+  cv = as.data.frame(cv)
+  cv$Gene = rownames(cv)
+  data = merge(data,cv,by="Gene")
+  p1 <- ggplot(data,aes(x = cv, y = caste_bias))+
+    geom_point(alpha = 0.4)+
+    geom_smooth(method = "loess",color = "red")+
+    main_theme+
+    xlab("mean coefficient of variation")+
+    ylab("total caste bias")+
+    ggtitle(species)
+  return(list(p1,data))
+}
+
+p1 <- cb_cv(antRes[[1]],antCV[[1]],"ant")
+p2 <- cb_cv(beeRes[[1]],beeCV[[1]],"bee")
+
+png("~/GitHub/devnetwork/figures/caste_cv_ant.png",width=2000,height=2000,res=300)
+p1[[1]]
+dev.off()
+
+png("~/GitHub/devnetwork/figures/caste_cv_bee.png",width=2000,height=2000,res=300)
+p2[[1]]
+dev.off()
+
+p1 <- cb_cv(antSocRes[[1]],antCV[[1]],"ant")
+p2 <- cb_cv(beeSocRes[[1]],beeCV[[1]],"bee")
+
+png("~/GitHub/devnetwork/figures/social_cv_ant.png",width=2000,height=2000,res=300)
+p1[[1]]+ylab("total nurse/forager bias")
+dev.off()
+
+png("~/GitHub/devnetwork/figures/social_cv_bee.png",width=2000,height=2000,res=300)
+p2[[1]]+ylab("total nurse/forager bias")
+dev.off()
+
+p1 <- cb_cv(antRes[[1]][,c(1,7:9)],antCV[[1]],"ant")
+p2 <- cb_cv(beeRes[[1]][,c(1,7:9)],beeCV[[1]],"bee")
+
+cor.test(p1[[2]]$caste_bias,p1[[2]]$cv,method = "spearman")
+cor.test(p2[[2]]$caste_bias,p2[[2]]$cv,method = "spearman")
+
+#adding Jasper data
+counts <- read.csv("~/GitHub/devnetwork/data/Jasper_counts.csv")
+fpkm <- read.csv("~/GitHub/devnetwork/data/Jasper_fpkm.csv")
+samples <- read.table("~/GitHub/devnetwork/data/samples_jasper.txt",head=T)
+rownames(counts) = counts$gene_id
+counts = counts[,-c(1)]
+rownames(fpkm) = fpkm$gene_id
+fpkm = fpkm[,-c(1)]
+
+samples$meta = as.factor(apply(samples[,c(1,2)],1,paste,collapse="_"))
+colnames(samples)[4] = "sample"
+
+cb_cv <- function(data,cv,species){
+  data$caste_bias = apply(data[,c(2:ncol(data))],1,function(x) sqrt(sum(x^2)))
+  cv = as.data.frame(cv)
+  cv$Gene = rownames(cv)
+  data = merge(data,cv,by="Gene")
+  p1 <- ggplot(data,aes(x = cv, y = caste_bias))+
+    geom_point(alpha = 0.4)+
+    geom_smooth(method = "loess",color = "red")+
+    main_theme+
+    xlab("mean coefficient of variation")+
+    ylab("total caste bias")+
+    ggtitle(species)
+  return(list(p1,data))
+}
+
+bee_tissueCV = averageCV(samples,fpkm)
+
+
+calculatetau <- function(factor,expr){
+  meanExpr <- lapply(levels(factor$meta),function(x) 
+    rowSums(as.data.frame(expr[,colnames(expr) %in% factor$sample[factor$meta==x]]))/sum(factor$meta==x))
+  meanExpr <- as.data.frame(do.call(cbind,meanExpr))
+  colnames(meanExpr) = levels(factor$meta)
+  geneDeviation = apply(meanExpr,1,function(x){
+    sum(ldply(lapply(c(1:25),function(i) 1-x[i]/max(x))))
+  })
+  
+  tau = geneDeviation/(24)
+  
+  return(tau)
+}
+
+tau <- calculatetau(samples,fpkm)
+
+p1 <- cb_cv(beeRes[[1]],tau,"bee")
+png("~/GitHub/devnetwork/figures/tissueSpec_caste.png",height=2000,width=2000,res=300)
+p1[[1]]+xlab("tissue specificity (tau)")
+dev.off()
+
+p1 <- cb_cv(beeSocRes[[1]],tau,"bee")
+png("~/GitHub/devnetwork/figures/tissueSpec_social.png",height=2000,width=2000,res=300)
+p1[[1]]+xlab("tissue specificity (tau)")+ylab("total behavior (nurse/forager) bias")
+dev.off()
+
+cor.test(p1[[2]]$caste_bias,p1[[2]]$cv,method = "spearman")
+
+develIndex <- function(counts,factor){
+  f = droplevels(factor[factor$tissue=="larva"|factor$tissue=="egg",])
+  i = 1
+  results = list()
+  f$stage = as.integer(as.character(f$stage))
+  for (lev1 in c(1:6)){
+    for (lev2 in c(1:6)){
+      if (lev2 <= lev1){
+        next;
+      }
+      f1 = droplevels(f[f$stage==lev1|f$stage==lev2,])
+      c = counts[,colnames(counts) %in% f1$sample]
+      design <- model.matrix(~stage+colony,data = f1)
+      res <- EdgeR(c,design,2) 
+      res$Gene = rownames(res)
+      res = res[,c("logFC","Gene")]
+      results[[i]] = res
+      i = i+1
+    }
+  }
+  allRes <- join_all(results,by="Gene",type='inner')
+  #devIndex <- apply(allRes[,-"Gene"],1,function(x) sqrt(sum(x^2)))
+  return(list(allRes,results))
+}
+
+devFCBee <- develIndex(bee,factorB)
+devIndex <- apply(devFCBee[[1]][,-c(2)],1,function(x) sqrt(sum(x^2)))
+devFCAnt <- develIndex(ant,factorA)
 
 
 
+#Next: compare tau to logFC of bee across development
+stageStat <- function(data,stat){
+  stat = as.data.frame(stat)
+  stat$Gene = rownames(stat)
+  data = merge(data,stat,by = "Gene")
+  corStats <- apply(data[,c(2:(ncol(data)-1))],2,function(x){
+    cor.test(x,data$stat)
+  })
+  cs <- ldply(lapply(corStats,function(x) c(x$estimate,x$conf.int[1],x$conf.int[2])))
+  return(cs)
+}
+
+d <- stageStat(beeRes[[1]],tau)
+d$stage = c("L2","L3","L4","L5","Pupa","Adult_Head","Adult_Mesosoma","Adult_Abdomen")
+d$stage = factor(d$stage,levels = d$stage)
+ggplot(d,aes(x = stage,y=cor))+
+  geom_bar(stat="identity")+
+  geom_errorbar(aes(ymin=V1,ymax=V2),width=0.2)+
+  main_theme+
+  ylab("correlation with caste bias")
+
+p1 <- cb_cv(beeSocRes[[1]],tau,"bee")
 
 vennAdult <- function(data,dev){
   d2 = data
