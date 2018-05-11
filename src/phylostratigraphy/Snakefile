@@ -1,0 +1,14 @@
+DB = "ncbi_nr"
+SPECIES = ["Amel","Mphar"]
+
+rule all:
+	input: expand("blastALL_{species}_final_ps_map.csv",species=SPECIES)
+
+rule makeDB:
+	output: "ncbi_nr."
+	shell: "formatdb -p T -i ncbi_nr"
+
+rule psMap:
+	input: "test_species/{species}.fa"
+	output: "blastALL_{species}_final_ps_map.csv"
+	shell: "perl createPSmap.pl --organism {input} --database {DB} --prefix blastALL_{species} --threads 80"

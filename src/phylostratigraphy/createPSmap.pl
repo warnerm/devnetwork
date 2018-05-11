@@ -21,7 +21,7 @@ my $db;
 my $psFile;
 my $seqOffset = 50;
 my $evalue = 1e-5;
-my $threads = 1;
+my $threads = 80;
 my $blastPlus;
 
 GetOptions('help' => \$help,
