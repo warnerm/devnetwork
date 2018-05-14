@@ -787,6 +787,19 @@ dev.off()
 
 cor.test(p1[[2]]$caste_bias,p1[[2]]$cv,method = "spearman")
 
+#Identify orthologs in bees to check for tissue-specificity 
+AntOGGRes <- merge(antRes[[1]],ogg11,by.x="Gene",by.y="gene_Mphar")
+AntOGGRes <- AntOGGRes[,-c(1,10)]
+AntOGGRes <- AntOGGRes[,c(9,1:8)]
+colnames(AntOGGRes)[1] = "Gene"
+p1 <- cb_cv(AntOGGRes,tau,"ant")
+png("~/GitHub/devnetwork/figures/tissueSpec_caste_ant.png",height=2000,width=2000,res=300)
+p1[[1]]+xlab("tissue specificity (tau)")+ylab("total caste bias")
+dev.off()
+
+
+
+
 develIndex <- function(counts,factor){
   f = droplevels(factor[factor$tissue=="larva"|factor$tissue=="egg",])
   i = 1
@@ -808,13 +821,35 @@ develIndex <- function(counts,factor){
     }
   }
   allRes <- join_all(results,by="Gene",type='inner')
-  #devIndex <- apply(allRes[,-"Gene"],1,function(x) sqrt(sum(x^2)))
-  return(list(allRes,results))
+  devIndex <- apply(allRes[,-c(2)],1,function(x) sqrt(sum(x^2)))
+  names(devIndex) = allRes$Gene
+  return(devIndex)
 }
 
 devFCBee <- develIndex(bee,factorB)
-devIndex <- apply(devFCBee[[1]][,-c(2)],1,function(x) sqrt(sum(x^2)))
 devFCAnt <- develIndex(ant,factorA)
+
+p1 <- cb_cv(antRes[[1]],devFCAnt,"ant")
+png("~/GitHub/devnetwork/figures/develBias_caste_ant.png",height=2000,width=2000,res=300)
+p1[[1]]+xlab("total developmental bias")
+dev.off()
+
+cor.test(p1[[2]]$caste_bias,p1[[2]]$cv)
+
+p1 <- cb_cv(beeRes[[1]],devFCBee,"bee")
+png("~/GitHub/devnetwork/figures/develBias_caste_bee.png",height=2000,width=2000,res=300)
+p1[[1]]+xlab("total developmental bias")
+dev.off()
+
+p1 <- cb_cv(antSocRes[[1]],devFCAnt,"ant")
+png("~/GitHub/devnetwork/figures/develBias_social_ant.png",height=2000,width=2000,res=300)
+p1[[1]]+xlab("total developmental bias")+ylab("total behavioral bias")
+dev.off()
+
+p1 <- cb_cv(beeSocRes[[1]],devFCBee,"bee")
+png("~/GitHub/devnetwork/figures/develBias_social_bee.png",height=2000,width=2000,res=300)
+p1[[1]]+xlab("total developmental bias")+ylab("total behavioral bias")
+dev.off()
 
 
 
@@ -858,13 +893,41 @@ vennAdult(beeDE[,c(1,7:9)],BeeDev)
 vennAdult(antDESoc,AntDev)
 vennAdult(beeDESoc,BeeDev)
 
+statDevel <- function(dfDE,dev){
+  dfDE$numQueen = apply(dfDE[,c(2:ncol(dfDE))],1,function(x) sum(x == "queen"))
+  dfDE$numWorker = apply(dfDE[,c(2:ncol(dfDE))],1,function(x) sum(x == "worker"))
+  dev = data.frame(Gene = names(dev),DevBias = dev)
+  dfDE = merge(dfDE,dev,by = "Gene")
+  d <- ddply(dfDE, ~ numQueen + numWorker, summarize,
+             dev = mean(DevBias))
+  p <- ggplot(d,aes(x = numQueen, y = numWorker, fill = dev))+
+    geom_tile()
+  p <- ggplot(dfDE,aes(x = as.factor(numQueen), y = DevBias))+
+    geom_boxplot()
+  lm <- glm(DevBias ~ numQueen + numWorker, data = dfDE)
+  
+  colnames(dfDE)[2:9] = c("L2","L3","L4","L5","Pupa","Adult_Head","Adult_Mesosoma","Adult_Abdomen")
+  dm = melt(dfDE[,c(1:9,12)],id.vars = c("Gene","DevBias"))
+  dm$variable=factor(dm$variable,levels = c("L2","L3","L4","L5","Pupa","Adult_Head","Adult_Mesosoma","Adult_Abdomen"))
+  
+  p <- ggplot(dm,aes(x = variable,y = DevBias,fill=value))+
+    geom_boxplot(notch = TRUE)+
+    main_theme
+  return(p)
+}
+
+png("~/GitHub/devnetwork/figures/AntDevelDevBias.png",height=2000,width=2000,res=300)
+statDevel(antDE,devFCAnt)+
+  theme(axis.text.x = element_text(angle = -45,hjust=0))+
+  ggtitle("ant")
+dev.off()
 
 
-
-
-
-
-
+png("~/GitHub/devnetwork/figures/BeeDevelDevBias.png",height=2000,width=2000,res=300)
+statDevel(beeDE,devFCBee)+
+  theme(axis.text.x = element_text(angle = -45,hjust=0))+
+  ggtitle("bee")
+dev.off()
 
 
 
@@ -1893,6 +1956,9 @@ data = cbind(data,factorA)
 ggplot(data[data$tissue=="larva",],aes(x=PC1,y=PC3,color=stage,shape=colony))+
   geom_point()
 #1st component is species, then stage, then tissue
+
+t = taxonomy(organism = "Monomorium pharaonis",db = "ncbi")
+
 
 
 
