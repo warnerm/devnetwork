@@ -27,7 +27,7 @@ Entrez.email = ""
 output = open('ncbiTest_edit.fa','w')
 output.close()
 
-with open('ncbiTest.fa') as input:
+with open('nr_ncbi') as input:
     for line in input:
         if line.startswith('>'):
             line = re.sub(' .*\[',' | [',line).strip()
