@@ -1,3 +1,9 @@
+#!/usr/bin/python
+#SBATCH -p compute # partition (queue)
+#SBATCH --export=ALL
+#SBATCH -t 10-00:00
+#SBATCH -n 1
+
 import sys
 from Bio import Entrez, SeqIO
 import re
