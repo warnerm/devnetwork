@@ -111,9 +111,9 @@ sub blastP{
     my $refOrgName = shift;
     my $threads = shift;
     my $e_val = shift;
-    
     my $psFile = $refOrgName;
     $psFile =~ s//"_"/g;
+
     
     my %psMap = ();
     
@@ -190,7 +190,6 @@ sub blastP{
                     }else{
                         $psMap{$gene->display_id} = $ps[1];
                     }
-                    
                     open(OUT,">>".$path."/".$save.".sql") or die $!;
                     my $sql = 	"INSERT INTO ".$table." ".
                     "VALUES(".
@@ -213,9 +212,7 @@ sub blastP{
             }
         }
     }
-    
-    open(OUT,">".$path."/".$psFile."_psMap.csv") or die $!;
-    print OUT "ID;PS";
+    open(OUT,">>".$path."/".$psFile."_psMap.csv") or die $!;
     while(my($k,$v) = each %psMap){
         print OUT $k.";".$v."\n";
     }
