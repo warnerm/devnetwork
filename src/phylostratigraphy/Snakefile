@@ -1,5 +1,5 @@
-DB = "nr_ncbi" #nr.gz database, downloaded May 10, 2018
-SPECIES = ["Amel","Mphar"] #Protein fasta files have headers edited, according to AlexGa github (note that need to remove "cellular organisms")
+DB = "phyloBlastDB.fa" #nr.gz database, downloaded May 10, 2018
+SPECIES = ["Mphar_small"] #Protein fasta files have headers edited, according to AlexGa github (note that need to remove "cellular organisms")
 
 rule all:
 	input: expand("blastALL_{species}_final_ps_map.csv",species=SPECIES)
@@ -10,8 +10,8 @@ rule makeDB:
 
 rule psMap:
 	input: "nr_ncbi.00.phr",
-			genomes="test_species/{species}_edit.fa",
+			genomes="{species}_edit.fa",
 	output: "blastALL_{species}_final_ps_map.csv"
-	shell: "perl createPSmap.pl --organism {input[genomes]} --database {DB} --prefix blastALL_{wildcards.species} --threads 80 --blastPlus"
+	shell: "perl PSmap_HajkD.pl -i {input[genomes]} -d {DB} -p BLAST_{wildcards.species} -r {wildcards.species}.blast_results -t 30 -a 1"
 
 

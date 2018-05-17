@@ -3,6 +3,9 @@ library(grid)
 library(gridExtra)
 library(reshape2)
 library(ggplot2)
+library(plyr)
+library(ppcor)
+library(viridis)
 
 main_theme=theme_bw()+
   theme(panel.grid.major = element_blank(),
@@ -244,9 +247,9 @@ speciesDEtests <- function(d,f,factorFun){
 }
 
 beeTests = speciesDEtests(bee,factorB,editFactor)
-beeTests_oneLarv = speciesDEtests(bee,factorB,editFactor_oneLarv)
+#beeTests_oneLarv = speciesDEtests(bee,factorB,editFactor_oneLarv)
 antTests = speciesDEtests(ant,factorA,editFactor)
-antTests_oneLarv = speciesDEtests(ant,factorA,editFactor_oneLarv)
+#antTests_oneLarv = speciesDEtests(ant,factorA,editFactor_oneLarv)
 
 collapseLogFC <- function(resList){
   d1 = d2 = data.frame(Gene = rownames(resList[[1]][[2]]))
@@ -929,6 +932,89 @@ statDevel(beeDE,devFCBee)+
   ggtitle("bee")
 dev.off()
 
+get_density <- function(x, y, n = 100) {
+  dens <- MASS::kde2d(x = x, y = y, n = n)
+  ix <- findInterval(x, dens$x)
+  iy <- findInterval(y, dens$y)
+  ii <- cbind(ix, iy)
+  return(dens$z[ii])
+}
+
+density_plot <- function(stats,x,y){
+  stats = stats[!is.na(stats[,x]) & !is.na(stats[,y]),]
+  stats$density=get_density(stats[,x],stats[,y])
+  p <- ggplot(stats,aes(x=stats[,x],y=stats[,y],color=density))+
+    geom_point()+
+    geom_smooth()+
+    scale_color_viridis()+
+    ylab(y)+
+    xlab(x)+
+    main_theme
+  return(p)
+}
+
+partial_cor <- function(stats,x,y){
+  return(pcor.test(stats[,x],stats[,y],stats$Expr,method="spearman"))
+}
+
+tauDF <- data.frame(Gene = names(tau),Tau=tau)
+dA = antRes[[1]]
+colnames(dA)[2:9] = c("L2","L3","L4","L5","Pupa","Adult_Head","Adult_Mesosoma","Adult_Abdomen")
+dev = data.frame(Gene = names(devFCAnt), DevBias = devFCAnt)
+cv = data.frame(Gene = names(antCV[[1]]),CV = antCV[[1]])
+dA = merge(dA,dev,by="Gene")
+dA = merge(dA,cv,by="Gene")
+dA <- merge(dA,ogg11,by.x="Gene",by.y="gene_Mphar",all.x=TRUE)
+dA <- merge(dA,tauDF,by.x="gene_Amel",by.y="Gene",all.x=TRUE)
+dA$cb = apply(dA[,c(3:10)],1,function(x) sum(sqrt(x^2))) 
+dA$cb_larv = apply(dA[,c(3:7)],1,function(x) sum(sqrt(x^2))) 
+dA$cb_adult = apply(dA[,c(8:10)],1,function(x) sum(sqrt(x^2))) 
+antExpr = data.frame(Gene = rownames(antT), Expr = apply(antT,1,function(x) log(mean(x)+1)))
+dA = merge(dA,antExpr,by="Gene")
+aStats = dA[,c(11,12,14:18)]
+aPlots <- lapply(colnames(aStats[,-c(5,6)]), function(x){
+  lapply(colnames(aStats[,-c(5,6)]), function(y) density_plot(aStats,x,y))
+})
+
+p <- unlist(aPlots,recursive=FALSE)
+p <- lapply(p,function(x) x+theme(legend.position="none",
+                                  axis.text=element_blank(),
+                                  axis.title=element_blank()))
+png("~/GitHub/devnetwork/figures/antAllCor.png",width=2000,height=2000,res=300)
+do.call(grid.arrange,c(p,ncol=length(aPlots)))
+dev.off()
+
+cor(aStats,method="spearman")
+
+
+dB = beeRes[[1]]
+colnames(dB)[2:9] = c("L2","L3","L4","L5","Pupa","Adult_Head","Adult_Mesosoma","Adult_Abdomen")
+dev = data.frame(Gene = names(devFCBee), DevBias = devFCBee)
+cv = data.frame(Gene = names(beeCV[[1]]),CV = beeCV[[1]])
+dB = merge(dB,dev,by="Gene")
+dB = merge(dB,cv,by="Gene")
+dB <- merge(dB,tauDF,by="Gene",all.x=TRUE)
+dB$cb = apply(dB[,c(2:9)],1,function(x) sum(sqrt(x^2))) 
+dB$cb_larv = apply(dB[,c(2:6)],1,function(x) sum(sqrt(x^2))) 
+dB$cb_adult = apply(dB[,c(7:9)],1,function(x) sum(sqrt(x^2))) 
+beeExpr = data.frame(Gene = rownames(beeT), Expr = apply(beeT,1,mean))
+dB = merge(dB,beeExpr,by="Gene")
+bStats = dB[,c(10:16)]
+aPlots <- lapply(colnames(bStats), function(x){
+  lapply(colnames(bStats), function(y) density_plot(aStats,x,y))
+})
+
+p <- unlist(aPlots,recursive=FALSE)
+p <- lapply(p,function(x) x+theme(legend.position="none",
+                                  axis.text=element_blank(),
+                                  axis.title=element_blank()))
+png("~/GitHub/devnetwork/figures/beeAllCor.png",width=2000,height=2000,res=300)
+do.call(grid.arrange,c(p,ncol=length(bStats)))
+dev.off()
+
+
+data = aStats
+pcor.test(data$cb,data$DevBias,data$cb_adult,method="spearman")
 
 
 
