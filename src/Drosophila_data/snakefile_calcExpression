@@ -1,9 +1,10 @@
 REF = "ref/GCF_000001215.4_Release_6_plus_ISO1_MT_genomic.fna"
 GFF = "ref/GCF_000001215.4_Release_6_plus_ISO1_MT_genomic.gff" #After removing everything after space from scaffolds
 
-SAMPLES, = glob_wildcards("fastq/{sample}_pass_1.fastq")
+PAIRED_SAMPLES, = glob_wildcards("fastq/{sample}_pass_1.fastq")
+SINGLE_SAMPLES, = glob_wildcards("fastq/{sample}_pass.fastq") #Four samples are single-end
 
-THREADS = 80
+THREADS = 12
 
 
 rule all:
@@ -19,16 +20,22 @@ rule makeRsemReference:
 	rsem-prepare-reference --star --gtf ref/my2.gtf --transcript-to-gene-map ref/knownIsoforms.txt {REF} ref/Dmel; \
 	rm ref/exon.gff ref/transcripts.fa ref/knownIsoforms.txt ref/my.gtf ref/my2.gtf"""
 
-rule rsemCalculateExpression:
+rule rsemCalculateExpression_paired:
 	input: left="fastq/{sample}_pass_1.fastq",
 			right="fastq/{sample}_pass_2.fastq",
 			db="ref/Dmel.seq"
 	output: "rsem/{sample}.genes.results"
 	shell: "rsem-calculate-expression -p {THREADS} --star --paired-end {input[left]} {input[right]} ref/Dmel {wildcards.sample}; mv {wildcards.sample}.* rsem/"
 
+rule rsemCalculateExpression_single:
+	input: reads="fastq/{sample}_pass.fastq",
+			db="ref/Dmel.seq"
+	output: "rsem/{sample}.genes.results"
+	shell: "rsem-calculate-expression -p {THREADS} --star {input[reads]} ref/Dmel {wildcards.sample}; mv {wildcards.sample}.* rsem/"
+
 #gather rsem results and make tables of counts and fpkm (samples in columns, genes in rows)
 rule collectRsem:
-	input: expand("rsem/{sample}.genes.results", sample=SAMPLES)
+	input: expand("rsem/{sample}.genes.results", sample=PAIRED_SAMPLES),expand("rsem/{sample}.genes.results",sample=SINGLE_SAMPLES)
 	output: "out/counts.csv.gz", "out/fpkm.csv.gz"
 	shell: "python2.7 collect_counts.py genes rsem/ | gzip > {output[0]}; \
 	python2.7 collect_fpkm.py genes rsem/ | gzip > {output[1]}"

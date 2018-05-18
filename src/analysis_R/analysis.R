@@ -763,15 +763,15 @@ bee_tissueCV = averageCV(samples,fpkm)
 
 
 calculatetau <- function(factor,expr){
-  meanExpr <- lapply(levels(factor$meta),function(x) 
-    rowSums(as.data.frame(expr[,colnames(expr) %in% factor$sample[factor$meta==x]]))/sum(factor$meta==x))
+  meanExpr <- lapply(levels(factor$tissue),function(x) 
+    rowSums(as.data.frame(expr[,colnames(expr) %in% factor$sample[factor$tissue==x]]))/sum(factor$tissue==x))
   meanExpr <- as.data.frame(do.call(cbind,meanExpr))
-  colnames(meanExpr) = levels(factor$meta)
+  colnames(meanExpr) = levels(factor$tissue)
   geneDeviation = apply(meanExpr,1,function(x){
-    sum(ldply(lapply(c(1:25),function(i) 1-x[i]/max(x))))
+    sum(ldply(lapply(c(1:12),function(i) 1-x[i]/max(x))))
   })
   
-  tau = geneDeviation/(24)
+  tau = geneDeviation/(11)
   
   return(tau)
 }
@@ -1014,7 +1014,8 @@ dev.off()
 
 
 data = aStats
-pcor.test(data$cb,data$DevBias,data$cb_adult,method="spearman")
+data = data[!is.na(data$Tau),]
+pcor.test(data$cb,data$Tau,data$Expr,method="spearman")
 
 
 

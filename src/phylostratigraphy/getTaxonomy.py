@@ -16,7 +16,11 @@ def get_tax_id(species):
     species = species.replace(' ', "+").strip()
     search = Entrez.esearch(term = species, db = "taxonomy", retmode = "xml")
     record = Entrez.read(search)
-    return record['IdList'][0]
+    print record['Count']
+    if int(record['Count']) == 0:
+        return 0
+    else:
+        return record['IdList'][0]
 
 def get_tax_data(taxid):
     """once we have the taxid, we can fetch the record"""
@@ -34,9 +38,26 @@ with open('nr_ncbi') as input:
             species = re.sub('.*\[','',line)
             species = re.sub('\]','',species)
             tax_id = get_tax_id(species)
-            tax = get_tax_data(tax_id)
-            lineage = tax[0]['Lineage']
-            lineage = re.sub('cellular organisms; ','',lineage)
-            line = line + ' | ' + '[' + lineage + ']\n'
-        with open('ncbiTest_edit.fa','a') as output:
-            output.write(line)
+            if tax_id == 0:
+                line = ''
+                skip = True
+            else:
+                tax = get_tax_data(tax_id)
+                lineage = tax[0]['Lineage']
+                lineage = re.sub('cellular organisms; ','',lineage)
+                line = line + ' | ' + '[' + lineage + ']\n'
+                skip = False
+            with open('ncbiTest_edit.fa','a') as output:
+                output.write(line)
+        else:
+            if not skip: 
+                with open('ncbiTest_edit.fa','a') as output:
+                    output.write(line)
+
+
+
+
+
+
+
+
