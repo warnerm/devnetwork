@@ -183,6 +183,25 @@ a = table(oggFilt$gene_Mphar)
 a = a[a==1]
 ogg11 = oggFilt[oggFilt$gene_Mphar %in% names(a),]
 
+#get orthologs with drosophila
+ogg111 <- read.csv("~/GitHub/devnetwork/data/ThreeWayOGGMap.csv")
+#Generated from Drosophila melanogaster gff file with the command grep "CDS.*FBpp.*gene=" GCF_000001215.4_Release_6_plus_ISO1_MT_genomic.gff | sed 's/.*FLYBASE:\(FBpp.*\),/\1,/' | sed 's/,.*gene=/\t/' | sed 's/;.*//' | uniq> test
+isoMap <- read.table("~/GitHub/devnetwork/data/Dmel_CDStoGene_key.txt")
+
+ogg111 = merge(ogg111,isoMap,by.x="gene_Dmel_FLYBASE",by.y="V1")
+
+t = table(ogg111$OGG)
+t = t[t==1]
+t2 = table(ogg111$gene_Mphar)
+t2 = t2[t2==1]
+t3 = table(ogg111$gene_Amel)
+t3 = t3[t3==1]
+t4 = table(ogg111$V2)
+t4 = t4[t4==1]
+ogg3f = ogg111[ogg111$OGG %in% names(t) & ogg111$gene_Mphar %in% names(t2) &
+                 ogg111$gene_Amel %in% names(t3) & ogg111$V2 %in% names(t4),]
+
+
 #Generate dataframe of ant and bee expression for each OGG
 orthoExpr <- getOrthoExpr(bee,ant)
 factorAll <- genFactor(orthoExpr)
@@ -247,9 +266,9 @@ speciesDEtests <- function(d,f,factorFun){
 }
 
 beeTests = speciesDEtests(bee,factorB,editFactor)
-#beeTests_oneLarv = speciesDEtests(bee,factorB,editFactor_oneLarv)
+beeTests_oneLarv = speciesDEtests(bee,factorB,editFactor_oneLarv)
 antTests = speciesDEtests(ant,factorA,editFactor)
-#antTests_oneLarv = speciesDEtests(ant,factorA,editFactor_oneLarv)
+antTests_oneLarv = speciesDEtests(ant,factorA,editFactor_oneLarv)
 
 collapseLogFC <- function(resList){
   d1 = d2 = data.frame(Gene = rownames(resList[[1]][[2]]))
@@ -280,6 +299,13 @@ antRes = collapseLogFC(antTests[[2]])
 antDE = DE_direction(antRes)
 beeRes = collapseLogFC(beeTests[[2]])
 beeDE = DE_direction(beeRes)
+
+antRes = collapseLogFC(antTests_oneLarv[[2]])
+antDE = DE_direction(antRes)
+beeRes = collapseLogFC(beeTests_oneLarv[[2]])
+beeDE = DE_direction(beeRes)
+
+
 
 DEheatmap <- function(dfDE,species){
   dfDE$numQueen = apply(dfDE[,c(2:ncol(dfDE))],1,function(x) sum(x == "queen"))
@@ -773,10 +799,11 @@ calculatetau <- function(factor,expr){
   
   tau = geneDeviation/(11)
   
-  return(tau)
+  return(list(tau,meanExpr))
 }
 
-tau <- calculatetau(samples,fpkm)
+beeTissue <- calculatetau(samples,fpkm)
+tau <- beeTissue[[1]]
 
 p1 <- cb_cv(beeRes[[1]],tau,"bee")
 png("~/GitHub/devnetwork/figures/tissueSpec_caste.png",height=2000,width=2000,res=300)
@@ -1004,6 +1031,56 @@ aPlots <- lapply(colnames(bStats), function(x){
   lapply(colnames(bStats), function(y) density_plot(aStats,x,y))
 })
 
+tissueExpr <- beeTissue[[2]]
+tissueExpr$Gene = rownames(tissueExpr)
+topTissue = apply(tissueExpr[,c(1:12)],1,function(x) colnames(tissueExpr)[1:12][x==max(x)])
+topTissue <- lapply(topTissue,function(x){
+  if (length(x) > 1) NA
+  else x
+})
+t = unlist(topTissue)
+tissueExpr$topTissue = t
+dBTissue <- merge(dB,tissueExpr[,c(13,14)],by="Gene")
+dBTissue = dBTissue[!is.na(dBTissue$Tau),]
+dBTissue_topTau <- dBTissue[dBTissue$Tau > quantile(dBTissue$Tau,0.9),]
+dBTissue_topTau$gland_type = "conserved"
+dBTissue_topTau$gland_type[dBTissue_topTau$topTissue=="hypophar" | dBTissue_topTau$topTissue== "mandibular" |
+                             dBTissue_topTau$topTissue == "nasonov" | dBTissue_topTau$topTissue == "sting" |
+                             dBTissue_topTau$topTissue == "antenna"] = "novel"
+dBTissue_topTau$gland_type = as.factor(dBTissue_topTau$gland_type)
+png("~/GitHub/devnetwork/figures/topTissue_cb.png",height = 2000, width = 2000, res = 300)
+ggplot(dBTissue_topTau,aes(x = topTissue,y=cb,fill = gland_type))+
+  geom_boxplot()+
+  main_theme+
+  ylab("caste bias")+
+  xlab("tissue with highest expression")+
+  theme(axis.text.x = element_text(angle = -45, hjust = 0))
+dev.off()
+
+png("~/GitHub/devnetwork/figures/topTissue_cb_cat.png",height = 2000, width = 2000, res = 300)
+ggplot(dBTissue_topTau,aes(x = gland_type,y=cb,fill = gland_type))+
+  geom_boxplot(notch=TRUE)+
+  main_theme+
+  theme(legend.position = "none")+
+  ylab("caste bias")+
+  xlab("tissue type")
+dev.off()
+
+wilcox.test(dBTissue_topTau$cb[dBTissue_topTau$gland_type=="novel"],dBTissue_topTau$cb[dBTissue_topTau$gland_type=="conserved"])
+
+dBTissue <- merge(dA,tissueExpr[,c(13,14)],by.x = "gene_Amel",by.y="Gene")
+dBTissue = dBTissue[!is.na(dBTissue$Tau),]
+dBTissue_topTau <- dBTissue[dBTissue$Tau > quantile(dBTissue$Tau,0.9),]
+dBTissue_topTau$gland_type = "conserved"
+dBTissue_topTau$gland_type[dBTissue_topTau$topTissue=="hypophar" | dBTissue_topTau$topTissue== "mandibular" |
+                             dBTissue_topTau$topTissue == "nasonov" | dBTissue_topTau$topTissue == "sting" |
+                             dBTissue_topTau$topTissue == "antenna"] = "novel"
+dBTissue_topTau$gland_type = as.factor(dBTissue_topTau$gland_type)
+ggplot(dBTissue_topTau,aes(x = topTissue,y=cb,fill = gland_type))+geom_boxplot()
+ggplot(dBTissue_topTau,aes(x = gland_type,y=cb,fill = gland_type))+geom_boxplot(notch=TRUE)
+wilcox.test(dBTissue_topTau$cb[dBTissue_topTau$gland_type=="novel"],dBTissue_topTau$cb[dBTissue_topTau$gland_type=="conserved"])
+
+
 p <- unlist(aPlots,recursive=FALSE)
 p <- lapply(p,function(x) x+theme(legend.position="none",
                                   axis.text=element_blank(),
@@ -1017,10 +1094,117 @@ data = aStats
 data = data[!is.na(data$Tau),]
 pcor.test(data$cb,data$Tau,data$Expr,method="spearman")
 
+######
+##Adding drosophila data
+######
+counts <- read.csv("~/GitHub/devnetwork/data/counts_drosophila.csv")
+fpkm <- read.csv("~/GitHub/devnetwork/data/fpkm_drosophila.csv")
+
+factors <- read.csv("~/GitHub/devnetwork/data/drosophila_sra.csv")
+rownames(counts) = rownames(fpkm) = counts$gene_id
+counts = counts[,-c(1)]
+fpkm = fpkm[,-c(1)]
+
+keep = apply(fpkm,1,function(x) sum(x > 1) >= length(x)/2)
+counts = counts[keep,]
+
+factors$time_factor = as.factor(factors$time)
+f_egg = factors[factors$time <= 12,]
+f_devel = factors[factors$time <= 18,]
+f_sex = factors[factors$time >= 25,]
+
+eggCV = apply(counts[,colnames(counts) %in% f_egg$SRA],1,function(x) sd(x)/mean(x))
+develCV = apply(counts[,colnames(counts) %in% f_devel$SRA],1,function(x) sd(x)/mean(x))
+
+#Determine the correlation of log fold change and the distance between i and j
+weightedLogFC <- function(gene){
+  fc = c()
+  dist = c()
+  for (i in 1:length(gene)){
+    for (j in 1:length(gene)){
+      if (i >= j){
+        next;
+      }
+      fc = c(fc,abs(log2(gene[i]/gene[j])))
+      dist = c(dist,abs(i-j))
+    } 
+  }
+  d = data.frame(fc = as.numeric(as.character(fc)), dist = as.numeric(as.character(dist)))
+  d = d[!is.na(d$fc) & !is.infinite(d$fc),]
+  if (nrow(d) < 2){
+    return(NA)
+  }
+  test = cor.test(d$fc,d$dist,method="spearman")
+  return(test$p.value)
+}
 
 
+c_egg = counts[,f_egg$SRA]
+c_egg = c_egg[,order(f_egg$time,decreasing=TRUE)] #Make samples ordered by time
+c_devel = counts[,f_devel$SRA]
+c_devel = c_devel[,order(f_devel$time,decreasing=TRUE)] #Make samples ordered by time
 
+eggWLFC <- apply(c_egg,1,weightedLogFC) #P-value representing effect of development
+develWLFC <- apply(c_devel,1,weightedLogFC)
 
+##Sex-biased genes
+design <- model.matrix(~sex+time_factor,data=droplevels(f_sex[f_sex$time>25,]))
+d = counts[,colnames(counts) %in% f_sex$SRA[f_sex$time>25]]
+sexGenes <- EdgeR(d,design,2)
+sexDE <- rownames(sexGenes)[sexGenes$FDR < 0.001]
+sexP <- data.frame(Gene = rownames(sexGenes), logP = -log(sexGenes$FDR))
+
+DmelCV = data.frame(Gene = rownames(c_egg),eggCV = eggCV, develCV = develCV, egg_FC = eggWLFC, devel_FC = develWLFC)
+DmelCV = merge(DmelCV,sexP,by="Gene")
+dA_ogg <- merge(dA,ogg3f,by.x="Gene",by.y="gene_Mphar")
+dA_ogg <- merge(dA_ogg,DmelCV,by.x="V2",by.y="Gene")
+dB_ogg <- merge(dB,ogg3f,by.x="Gene",by.y="gene_Amel")
+dB_ogg <- merge(dB_ogg,DmelCV,by.x="V2",by.y="Gene")
+
+design <- model.matrix(~caste+colony,data = droplevels(factorA[grepl("AQH|_MH",factorA$sample),]))
+d = ant[,colnames(ant) %in% rownames(design)]
+antSex <- EdgeR(d,design,2)
+aS = data.frame(Gene = rownames(antSex),logP_hymSex = -log(antSex$FDR))
+dA_ogg = merge(dA_ogg,aS,by="Gene")
+
+design <- model.matrix(~caste+colony,data = droplevels(factorB[grepl("AQH|_MH",factorA$sample),]))
+d = bee[,colnames(bee) %in% rownames(design)]
+beeSex <- EdgeR(d,design,2)
+bS = data.frame(Gene = rownames(beeSex),logP_hymSex = -log(beeSex$FDR))
+dB_ogg = merge(dB_ogg,bS,by="Gene")
+
+corTable <- function(dA){
+  xCols <- c("logP_hymSex","logP","eggCV","develCV","egg_FC","devel_FC")
+  yCols <- c("DevBias","cb","cb_adult","cb_larv","logP_hymSex")
+  results = matrix(nrow=6,ncol=5)
+  results2 = matrix(nrow=6,ncol=5)
+  
+  for (i in 1:6){
+    for (j in 1:5){
+      if (i < 5){
+        results[i,j] = cor.test(dA[,xCols[i]],dA[,yCols[j]],method="spearman",alternative="greater")$p.value
+        results2[i,j] = cor.test(dA[,xCols[i]],dA[,yCols[j]],method="spearman",alternative="greater")$estimate
+        
+      } else {
+        results[i,j] = cor.test(-log(dA[,xCols[i]]),dA[,yCols[j]],method="spearman",alternative="greater")$p.value
+        results2[i,j] = cor.test(-log(dA[,xCols[i]]),dA[,yCols[j]],method="spearman",alternative="greater")$estimate
+      }
+    }
+  }
+  colnames(results) = colnames(results2) = yCols
+  rownames(results) = rownames(results2) = xCols
+  return(list(results,results2))
+}
+
+aTab = corTable(dA_ogg)
+bTab = corTable(dB_ogg)
+
+#Looking at development more discretely
+ogg3f$ApisDev = ogg3f$MpharDev = ogg3f$DmelDev = ogg3f$hymDev = 0
+ogg3f$ApisDev[ogg3f$gene_Amel %in% BeeDev] = 1
+ogg3f$MpharDev[ogg3f$gene_Mphar %in% AntDev] = 1
+ogg3f$DmelDev[ogg3f$V2 %in% DmelCV$Gene[DmelCV$egg_FC < 0.05/nrow(DmelCV)]]=1
+ogg3f$hymDev[ogg3f$ApisDev+ogg3f$MpharDev==2]=1
 
 
 
