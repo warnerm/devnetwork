@@ -7,31 +7,44 @@
 import sys
 from Bio import Entrez, SeqIO
 import re
+import linecache
 
-#From https://stackoverflow.com/questions/16504238/attempting-to-obtain-taxonomic-information-from-biopython
+name_file = "names_filtered.dmp"
+node_file = "nodes.dmp"
+cellular_node = 131567 #The node that is cellular organism
+
 def get_tax_id(species):
-    """to get data from ncbi taxomomy, we need to have the taxid. we can
-    get that by passing the species name to esearch, which will return
-    the tax id"""
-    species = species.replace(' ', "+").strip()
-    search = Entrez.esearch(term = species, db = "taxonomy", retmode = "xml")
-    record = Entrez.read(search)
-    print record['Count']
-    if int(record['Count']) == 0:
-        return 0
-    else:
-        return record['IdList'][0]
+    """to get data from ncbi taxomomy, we need to have the taxid"""
+    with open(name_file) as input:
+        for line in input:
+            if species in line:
+                tax_id = re.match('[0-9]+',line).group(0)
+    return tax_id
 
 def get_tax_data(taxid):
     """once we have the taxid, we can fetch the record"""
-    search = Entrez.efetch(id = taxid, db = "taxonomy", retmode = "xml")
-    return Entrez.read(search)
+    current_node = int(taxid)
+    lineage = ""
+    #Iterate through nodes_file until we get to cellular organisms
+    while True:
+        print current_node
+        with open(node_file) as input:
+            for line in input:
+                #print line
+                #print re.match(r'(\d+)',line).group(0)
+                if int(re.match(r'(\d+)',line).group(0)) == current_node:
+                    current_node = int(re.search(r"(\d+).*?(\d+)",line).group(2)) #parent node is the second column
+                    break;
+        if current_node == cellular_node: break;
+        with open(name_file) as input:
+            for line in input:
+                if int(re.match(r'(\d+)',line).group(0)) == current_node:
+                    lineage = re.search('[A-Za-z]+',line).group(0) + "; " + lineage
+                    break; #Necessary because file contains synonyms after the first level
+    lineage = lineage[:-2] #Remove last semi-colon
+    return lineage
 
-Entrez.email = ""
-output = open('ncbiTest_edit.fa','w')
-output.close()
-
-with open('nr_ncbi') as input:
+with open("ncbiTest.fa") as input:
     for line in input:
         if line.startswith('>'):
             line = re.sub(' .*\[',' | [',line).strip()
@@ -42,9 +55,7 @@ with open('nr_ncbi') as input:
                 line = ''
                 skip = True
             else:
-                tax = get_tax_data(tax_id)
-                lineage = tax[0]['Lineage']
-                lineage = re.sub('cellular organisms; ','',lineage)
+                lineage = get_tax_data(tax_id)
                 line = line + ' | ' + '[' + lineage + ']\n'
                 skip = False
             with open('ncbiTest_edit.fa','a') as output:
@@ -52,9 +63,8 @@ with open('nr_ncbi') as input:
         else:
             if not skip: 
                 with open('ncbiTest_edit.fa','a') as output:
-                    output.write(line)
-
-
+                    output.write(line)            
+    
 
 
 
