@@ -1,0 +1,22 @@
+DB = "nr_ncbi"
+NODES = "nodes.dmp"
+NAMES = "names_filtered.dmp"
+THREADS = 12
+
+rule all: 
+	input: "ncbi_edit.fa"
+
+rule getSpecies:
+	output: "spec_names"
+	shell: """grep ">" {DB} | sed 's/.*\[//' | sed 's/\]//' | uniq > spec_names"""
+
+rule getTax:
+	input: "spec_names"
+	output: "spec_tax"
+	shell: "python2.7 names_to_tax.py {input} {output} {THREADS}"
+
+#rule editDB:
+#	input: "spec_names"
+#	output: "ncbi_edit.fa"
+#	shell: "python2.7 edit_ncbi.py {THREADS}"
+
