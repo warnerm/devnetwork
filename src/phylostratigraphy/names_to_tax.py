@@ -53,7 +53,7 @@ def get_tax_data(species):
 
 spec_names = sys.argv[1]
 outfile = sys.argv[2]
-threads = 12
+threads = sys.argv[3]
 
 with open(spec_names) as input:
     Parallel(n_jobs = int(threads))(delayed(get_tax_data) (spec) for spec in input)
