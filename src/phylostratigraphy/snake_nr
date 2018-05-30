@@ -4,19 +4,27 @@ NAMES = "names_filtered.dmp"
 THREADS = 12
 
 rule all: 
-	input: "ncbi_edit.fa"
+	input: "spec_tax"
+
 
 rule getSpecies:
 	output: "spec_names"
 	shell: """grep ">" {DB} | sed 's/.*\[//' | sed 's/\]//' | uniq > spec_names"""
 
-rule getTax:
+#Make SQL database of species nodes and names file
+rule makeSpecDB:
 	input: "spec_names"
-	output: "spec_tax"
-	shell: "python2.7 names_to_tax.py {input} {output} {THREADS}"
+	output: "names.sql"
+	shell: "python2.7 makeSpecDB.py {input} {output} {THREADS}"
 
+rule getTax:
+	input: "names.sql"
+	output: "tax.sql"
+	shell: "python2.7 makeTaxDB.py {input} {output} {THREADS}"
+
+#Use SeqIO to go through all sequence names and edit them using tax.sql
 #rule editDB:
-#	input: "spec_names"
+#	input: "tax.sql"
 #	output: "ncbi_edit.fa"
 #	shell: "python2.7 edit_ncbi.py {THREADS}"
 
