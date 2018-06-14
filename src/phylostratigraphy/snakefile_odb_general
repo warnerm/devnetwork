@@ -12,7 +12,7 @@ wildcard_constraints:
 THREADS = 6
 
 rule all:
-	input: expand("../out/{test}_{ref}_extra_ps",zip,ref=REF_SPEC,test=TEST_SPEC),expand("../out/{test}_{ref}_END",zip,test=TEST_SPEC,ref=REF_SPEC),expand("../out/{test}_{ref}_ps",zip,test=TEST_SPEC,ref=REF_SPEC)
+	input: expand("../out/{test}_{ref}_extra_ps",zip,ref=REF_SPEC,test=TEST_SPEC),expand("../out/{test}_{ref}_END",zip,test=TEST_SPEC,ref=REF_SPEC),expand("../out/{test}_{ref}_ps",zip,test=TEST_SPEC,ref=REF_SPEC),expand("../out/TGmap_{test}.txt",test=TEST_SPEC),expand("../out/{test}_{ref}_METs",zip,ref=REF_SPEC,test=TEST_SPEC)
 
 #Make blastDB for references. The .fs files come from OrthoDB
 rule makeDB:
@@ -35,7 +35,7 @@ rule filterOGG:
 #Get metazoan OGGs
 rule metOGG:
 	input: geneList="../out/{ref}_{test}_blastRes.tab", oggList="../temp/{ref}.tab"
-	output: "../temp/{test}_{ref}_METs"
+	output: "../out/{test}_{ref}_METs"
 	shell: "module load python/anaconda/2.7; sed 's/gnl.* //' {input[geneList]} | awk {{'print$2'}} | sort | uniq > ../temp/geneEdit; python2.7 getMetOGG.py ../temp/geneEdit {output} {THREADS} {input[oggList]}"
 
 #Get Endopterygota OGGs
@@ -52,13 +52,13 @@ rule taxDB:
 
 #Go through all OGGs and find what phylostrata they are
 rule getPS:
-	input: met="../temp/{test}_{ref}_METs",taxDB="../data/taxonomy.db"
+	input: met="../out/{test}_{ref}_METs",taxDB="../data/taxonomy.db"
 	output: protected("../out/{test}_{ref}_ps")
 	shell: "cat {input[met]} | sort | uniq > ../temp/METogg; python2.7 getPS.py ../temp/METogg {output} {THREADS} {ODB_OG2G}"
 
 #Find transcripts that didn't map to any of the genes in the OGG file and return a fasta file with them
 rule extraGene:
-	input: blast="../out/{ref}_{test}_blastRes.tab",genome="../data/{test}_prot.fa",ogg="../temp/{test}_{ref}_METs"
+	input: blast="../out/{ref}_{test}_blastRes.tab",genome="../data/{test}_prot.fa",ogg="../out/{test}_{ref}_METs"
 	output: "../temp/{test}_{ref}_extraGene"
 	shell: """grep ">" {input[genome]} | tr -d ">" > ../temp/allseq; \
 			module load python/anaconda/2.7; python getExtra.py ../temp/allseq {input[blast]} {input[ogg]} {output}"""
@@ -87,6 +87,11 @@ rule blastExtra:
 	input: extra="../temp/{test}_{ref}_extraGene",tax="../data/taxonomy_hym.db",db="../temp/allHym.phr",prot="../data/{test}_prot.fa"
 	output: "../out/{test}_{ref}_extra_ps"
 	shell: "module load python/anaconda/2.7; python getPS_hym.py {input[extra]} {output} {THREADS} {input[db]} {wildcards.ref} {input[prot]}"
+
+rule transcriptGeneMap:
+	input: "../data/{test}.gff"
+	output: "../out/TGmap_{test}.txt"
+	shell: """grep "protein_id" {input} | grep "gene=" | sed 's/.*gene=//' | sed 's/;.*protein_id=/\t/' | sed 's/;.*//' | sort | uniq > {output}"""
 
 
 
