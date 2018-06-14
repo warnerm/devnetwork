@@ -1,0 +1,93 @@
+#snakefile to calculate evolutionary rate of protein sequences between apis mellifera, nasonia, and solenopsis invicta
+TEST_SPEC = ["Mphar","Amel","Dmel"] #Need to have protein files like ../data/Mphar_prot.fa, which is the protein.faa from RefSeq with headers trimmed to only include gene name
+REF_SPEC = ["307658","7460","7227"] #Find these in ODB_SPEC. Should be the closest related species in ODB9 (or the species itself). Put the appropriate .fs file in the data folder (from the fasta files in ODB9)
+HYMGENOMES, = glob_wildcards("../data/hymRef/{hym}.fa")
+
+ODB_SPEC = "../data/odb9v1_species.tab"
+ODB_OG2G = "../data/odb9v1_OG2genes.tab" 
+
+wildcard_constraints:
+	ref="307658|7460|7227",test="Mphar|Amel|Dmel"
+
+THREADS = 6
+
+rule all:
+	input: expand("../out/{test}_{ref}_extra_ps",zip,ref=REF_SPEC,test=TEST_SPEC),expand("../out/{test}_{ref}_END",zip,test=TEST_SPEC,ref=REF_SPEC),expand("../out/{test}_{ref}_ps",zip,test=TEST_SPEC,ref=REF_SPEC)
+
+#Make blastDB for references. The .fs files come from OrthoDB
+rule makeDB:
+	input: "../data/{ref}.fs"
+	output: "../temp/{ref}.phr"
+	shell: "makeblastdb -in {input} -dbtype prot -out ../temp/{wildcards.ref}"
+
+#Perform genome-wide pairwise blast
+rule pairwiseBlast:
+	input: ref="../temp/{ref}.phr",test="../data/{test}_prot.fa"
+	output: "../out/{ref}_{test}_blastRes.tab"
+	shell: "module load python/anaconda/2.7; python pairwiseBlast.py -s {input[test]} -d {input[ref]} -t {THREADS} -o {output}"
+
+#Get reference protein -> OGG map
+rule filterOGG:
+	input: "../temp/{ref}.phr"
+	output: "../temp/{ref}.tab"
+	shell: """grep "{wildcards.ref}:" {ODB_OG2G} > {output}"""
+
+#Get metazoan OGGs
+rule metOGG:
+	input: geneList="../out/{ref}_{test}_blastRes.tab", oggList="../temp/{ref}.tab"
+	output: "../temp/{test}_{ref}_METs"
+	shell: "module load python/anaconda/2.7; sed 's/gnl.* //' {input[geneList]} | awk {{'print$2'}} | sort | uniq > ../temp/geneEdit; python2.7 getMetOGG.py ../temp/geneEdit {output} {THREADS} {input[oggList]}"
+
+#Get Endopterygota OGGs
+rule endOGG:
+	input: geneList="../out/{ref}_{test}_blastRes.tab", oggList="../temp/{ref}.tab"
+	output: "../out/{test}_{ref}_END"
+	shell: "module load python/anaconda/2.7; sed 's/gnl.* //' {input[geneList]} | awk {{'print$2'}} | sort | uniq > ../temp/geneEdit; python2.7 getEndOGG.py ../temp/geneEdit {output} {THREADS} {input[oggList]}"
+
+#Build taxonomy database for all metazoans in ODB9
+rule taxDB:
+	output: "../data/taxonomy.db"
+	shell: """awk '{{print$1}}' {ODB_SPEC} > ../temp/spec_nodes; \
+			python2.7 makeTaxDB.py ../temp/spec_nodes"""
+
+#Go through all OGGs and find what phylostrata they are
+rule getPS:
+	input: met="../temp/{test}_{ref}_METs",taxDB="../data/taxonomy.db"
+	output: protected("../out/{test}_{ref}_ps")
+	shell: "cat {input[met]} | sort | uniq > ../temp/METogg; python2.7 getPS.py ../temp/METogg {output} {THREADS} {ODB_OG2G}"
+
+#Find transcripts that didn't map to any of the genes in the OGG file and return a fasta file with them
+rule extraGene:
+	input: blast="../out/{ref}_{test}_blastRes.tab",genome="../data/{test}_prot.fa",ogg="../temp/{test}_{ref}_METs"
+	output: "../temp/{test}_{ref}_extraGene"
+	shell: """grep ">" {input[genome]} | tr -d ">" > ../temp/allseq; \
+			module load python/anaconda/2.7; python getExtra.py ../temp/allseq {input[blast]} {input[ogg]} {output}"""
+
+#Edit header on all hymenoptera fasta files
+rule editHeader:
+	input: "../data/hymRef/{hymref}.fa"
+	output: "../temp/{hymref}_edit.fa"
+	shell: "sed 's/>/>{wildcards.hymref}_/' {input} > {output}"
+
+#Combine all hymenoptera fasta, make blast DB
+rule combineFasta:
+	input: expand("../temp/{hymref}_edit.fa",hymref=HYMGENOMES)
+	output: "../temp/allHym.fa","../temp/allHym.phr"
+	shell: "cat ../temp/*_edit.fa > {output[0]}; makeblastdb -in {output[0]} -dbtype prot -out ../temp/allHym"
+
+#Build taxonomy database for all hymenopterans
+rule taxDB_hym:
+	input: expand("../temp/{hymref}_edit.fa",hymref=HYMGENOMES)
+	output: "../data/taxonomy_hym.db"
+	shell: """module load python/anaconda/2.7; ls ../temp/*_edit.fa | sed 's/.*\///' > ../temp/spec_list; \
+			python makeTaxDB_hym.py ../temp/spec_list"""
+
+#Blast transcripts against database of hymenopteran proteins and call phylostrata
+rule blastExtra:
+	input: extra="../temp/{test}_{ref}_extraGene",tax="../data/taxonomy_hym.db",db="../temp/allHym.phr",prot="../data/{test}_prot.fa"
+	output: "../out/{test}_{ref}_extra_ps"
+	shell: "module load python/anaconda/2.7; python getPS_hym.py {input[extra]} {output} {THREADS} {input[db]} {wildcards.ref} {input[prot]}"
+
+
+
+
