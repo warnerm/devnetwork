@@ -11,6 +11,7 @@ library(plyr)
 library(ppcor)
 library(viridis)
 library(ggmosaic)
+library(lemon)
 
 main_theme=theme_bw()+
   theme(panel.grid.major = element_blank(),
@@ -182,6 +183,22 @@ speciesCasteAllStage <- function(stageRes){
     geneslfcW = genes[genes %in% rownames(stageRes[[i]][[2]])[stageRes[[i]][[2]]$logFC > 0]]
   }
   return(list(genes,geneslfcQ,geneslfcW))
+}
+
+#Interaction test- for larvae and pupae
+interactionDE <- function(d,f){
+  f = droplevels(f[(f$tissue=="pupa" | f$tissue == "larva" | f$tissue =="head" | f$tissue == "mesosoma") & f$stage != 2 & f$caste!="male",])
+  design =  model.matrix(~caste*stage + colony, data = f)
+  res = EdgeR(d[,colnames(d) %in% f$sample],design,9:12)
+  return(res)
+}
+
+#Interaction test- for adults
+interactionDE_adult <- function(d,f){
+  f = droplevels(f[f$stage==8 & f$caste != "male" & !grepl("_V",f$sample),])
+  design =  model.matrix(~caste*tissue + colony, data = f)
+  res = EdgeR(d[,colnames(d) %in% f$sample],design,7:8)
+  return(res)
 }
 
 #Run all DE tests
@@ -493,10 +510,61 @@ FCplot <- function(test1,test2){
   FC$DE[FC$Gene %in% test1[[3]] &FC$Gene %in% test2[[3]]] = "Queen-downreg"
   p <- ggplot(FC,aes(x = -FC.x,y = -FC.y))+ #Queen-up will be positive
     geom_point(aes(color = DE))+
-    geom_smooth()+
+    geom_smooth(method="lm",se=FALSE)+
     theme_bw()
   return(list(p,cor.test(FC$FC.x,FC$FC.y,method = "spearman"),table(FC$DE)))
 }
+
+grid_arrange_shared_legend <- function(..., ncol = length(list(...)), nrow = 1, position = c("bottom", "right","top")) {
+  
+  plots <- list(...)
+  position <- match.arg(position)
+  g <- ggplotGrob(plots[[1]] + theme(legend.position = position))$grobs
+  legend <- g[[which(sapply(g, function(x) x$name) == "guide-box")]]
+  lheight <- sum(legend$height)
+  lwidth <- sum(legend$width)
+  gl <- lapply(plots, function(x) x + theme(legend.position="none",
+                                            axis.line.x = element_line(color='black'),
+                                            axis.line.y = element_line(color='black'),
+                                            plot.margin = unit(c(0.5,0.5,0.5,0.5),"cm")))
+  gl <- c(gl, ncol = ncol, nrow = nrow)
+  
+  combined <- switch(position,
+                     "bottom" = arrangeGrob(do.call(arrangeGrob, gl),
+                                            legend,
+                                            ncol = 1,
+                                            heights = unit.c(unit(1, "npc") - lheight, lheight)),
+                     "right" = arrangeGrob(do.call(arrangeGrob, gl),
+                                           legend,
+                                           ncol = 2,
+                                           widths = unit.c(unit(1, "npc") - lwidth, lwidth)),
+                     "top" = arrangeGrob(legend,
+                                         do.call(arrangeGrob, gl),
+                                         ncol = 1,
+                                         heights = unit.c(lheight,unit(1, "npc") - lheight))
+                     
+  )
+  
+  return(combined)
+  
+}
+
+
+#Make venn diagram showing overlap of differential expression definitions
+DEoverlap <- function(d, caste, species,larv = TRUE){
+  if (larv){
+    labels = c("L2","L3","L4","L5")
+  } else {
+    labels = c("larva","pupa","head","mesosoma","abdomen")
+  }
+  v = apply(d[,c(2:ncol(d))],2,function(x) d$Gene[x==caste])
+  names(v) = labels
+  venn.diagram(v,filename = paste("~/GitHub/devnetwork/figures/venn",caste,species,larv,".png",sep="_"),
+               main = paste(species,caste,sep=", "),
+               imagetype = "png",
+               main.cex = 1.5)
+}
+
 
 
 ############
@@ -551,6 +619,36 @@ t4 = t4[t4==1]
 ogg3f = ogg111[ogg111$OGG %in% names(t) & ogg111$gene_Mphar %in% names(t2) &
                  ogg111$gene_Amel %in% names(t3) & ogg111$V2 %in% names(t4),]
 
+d = read.table("~/GitHub/devnetwork/src/phylostratigraphy/Mphar_307658_ps")
+dnds=read.table("~/Dropbox/monomorium nurses/data/dnds.txt",head=F)   #dim 22476
+
+colnames(dnds)=c("gene_id","dnds")
+ann=read.table("~/Dropbox/monomorium nurses/data/monomorium.annotation.txt",sep="\t",head=T,quote="\"",stringsAsFactors = FALSE)   # note, problem caused by "'" in file
+
+#add gene_id column to annotation based on the same order in dnds file
+ann$gene_id=dnds$gene_id
+
+ext <- read.csv("~/Downloads/msx123_Supp (1)/MpharAnn.csv") #load in MBE results
+ePS <- ext[,c("Gene","PS2")]
+
+Aps <- read.table("~/GitHub/devnetwork/data/Mphar_307658_ps")
+Bps <- read.table("~/GitHub/devnetwork/data/Amel_7460_ps")
+Amap <- read.table("~/GitHub/devnetwork/data/307658_Mphar_blastRes.tab")
+Bmap <- read.table("~/GitHub/devnetwork/data/7460_Amel_blastRes.tab")
+Amets <- read.table("~/GitHub/devnetwork/data/Mphar_307658_METs")
+Bmets <- read.table("~/GitHub/devnetwork/data/Amel_7460_METs")
+
+mergeMap <- function(ps,map,mets){
+  ps = ps[!duplicated(ps),]
+  psM <- merge(ps,mets,by.x="V1",by.y="V2")
+  colnames(psM) = c("OGG","ps","ODB_gene")
+  psf <- merge(psM,map,by.x = "ODB_gene",by.y="V3",all.y=TRUE)
+}
+
+
+
+
+
 ########
 ##Identify differentially expressed genes
 ########
@@ -565,22 +663,72 @@ bee_VM = ovaryDE(bee,factorB)
 beeSocial <- speciesSocial(bee,factorB) #comparing nurses to foragers
 antSocial <- speciesSocial(ant,factorA)
 
+save(beeTests,beeTests_oneLarv,antTests,antTests_oneLarv,ant_sexDE,bee_sexDE,ant_VM,bee_VM,beeSocial,antSocial,file = "~/GitHub/devnetwork/data/DEtests.RData")
+
+
 #Extract logFC, FDR from DE results
 antRes = collapseLogFC(antTests_oneLarv[[2]])
 beeRes = collapseLogFC(beeTests_oneLarv[[2]])
+antRes_allstage = collapseLogFC(antTests[[2]])
+beeRes_allstage = collapseLogFC(beeTests[[2]])
 
 #Make dataframes for differential expression at each stage
-antDE_allstage = DE_direction(antRes)
-beeDE_allstage = DE_direction(beeRes)
+antDE_allstage = DE_direction(antRes_allstage)
+beeDE_allstage = DE_direction(beeRes_allstage)
 antDE = DE_direction(antRes)
 beeDE = DE_direction(beeRes)
 
+colnames(antDE) = c("Gene","larva","pupa","head","thorax","abdomen")
+antDE = merge(antDE,ePS,by="Gene")
+aM <- melt(antDE,id.vars=c("Gene","PS2"))
+
+ggplot(aM[aM$variable=="abdomen",],aes(x = value,fill=PS2))+
+  geom_bar(stat="count")
+
+#Compare differential expression between species
+antDEo = merge(antDE_allstage,ogg11,by.x="Gene",by.y="gene_Mphar")
+beeDEo = merge(beeDE_allstage,ogg11,by.x="Gene",by.y="gene_Amel")
+results = list()
+for (col in colnames(antDEo[c(2:9)])){
+  d1 = antDEo[,c(col,"OGG")]
+  d2 = beeDEo[,c(col,"OGG")]
+  d = merge(d1,d2,by='OGG')
+  colnames(d)[c(2,3)] = c("ant","bee")
+  aDE = d$OGG[d$ant!="nonDE"]
+  bDE = d$OGG[d$bee!="nonDE"]
+  shared = sum(aDE %in% bDE)
+  fishDE = fisher.test(rbind(c(shared,length(aDE) - shared),
+                       c(length(bDE) - shared,nrow(d) - length(aDE) - length(bDE) + shared)),alternative = "greater")
+  dShared = d[d$OGG %in% aDE[aDE %in% bDE],]
+  aQ = dShared$OGG[dShared$ant=="queen"]
+  bQ = dShared$OGG[dShared$bee=="queen"]
+  bothQ = sum(aQ %in% bQ)
+  fishCaste = fisher.test(rbind(c(bothQ,length(aQ) - bothQ),
+                                c(length(bQ) - bothQ,nrow(dShared) - length(aQ) - length(bQ) + bothQ)),alternative="greater")
+  
+  results[[col]] = c(shared,length(aDE),length(bDE),fishDE$estimate,fishDE$p.value,
+                     bothQ,length(aQ),length(bQ),fishCaste$estimate,fishCaste$p.value)
+}
+
+res = ldply(results)
+colnames(res) = c("Stage/tissue","shared","antN","beeN",
+                  "Fisher_odds","FisherP",
+                  "sharedQ","antQ","beeQ","Fisher_odds","FisherP")
+
+res[,c(5,6,10,11)] = apply(res[,c(5,6,10,11)],2,function(x) signif(x,3))
+res[,1] = c("L2","L3","L4","L5","pupa","adult_head","adult_mesosoma","adult_abdomen")
+
+png("~/GitHub/devnetwork/figures/DEtable.png",height=2000,width=4000,res=300)
+grid.table(res)
+dev.off()
+
 #Get genes with interaction effects
-intAnt = antTests[[1]][[2]]
-intBee = beeTests[[1]][[2]]
+intAnt = rownames(antInt)[antInt$FDR < 0.05]
+intBee = rownames(beeInt)[beeInt$FDR < 0.05]
 ogg11$intAnt = ogg11$intBee = 0
 ogg11$intAnt[ogg11$gene_Mphar %in% intAnt] = 1
 ogg11$intBee[ogg11$gene_Amel %in% intBee] = 1
+vennDiagram(ogg11[,c("intAnt","intBee")])
 
 #Extract abdomen genes for later use
 ogg11$abdAnt = ogg11$abdBee = "nonDE"
@@ -588,6 +736,17 @@ ogg11$abdAnt[ogg11$gene_Mphar %in% antDE$Gene[antDE$`8_gaster`=="worker"]]="work
 ogg11$abdAnt[ogg11$gene_Mphar %in% antDE$Gene[antDE$`8_gaster`=="queen"]]="queen"
 ogg11$abdBee[ogg11$gene_Amel %in% beeDE$Gene[beeDE$`8_gaster`=="worker"]]="worker"
 ogg11$abdBee[ogg11$gene_Amel %in% beeDE$Gene[beeDE$`8_gaster`=="queen"]]="queen"
+
+DEoverlap(antDE,"queen","ant",FALSE)
+DEoverlap(antDE,"worker","ant",FALSE)
+DEoverlap(antDE_allstage[,c(1:5)],"queen","ant",TRUE)
+DEoverlap(antDE_allstage[,c(1:5)],"worker","ant",TRUE)
+
+DEoverlap(beeDE,"queen","bee",FALSE)
+DEoverlap(beeDE,"worker","bee",FALSE)
+DEoverlap(beeDE_allstage[,c(1:5)],"queen","bee",TRUE)
+DEoverlap(beeDE_allstage[,c(1:5)],"worker","bee",TRUE)
+
 
 #Figure 1a,b: Caste-bias changes across development
 png("~/GitHub/devnetwork/figures/AntDEnums.png",width=2000,height=2000,res=300)
@@ -703,8 +862,9 @@ dev.off()
 chisq.test(rbind(c(868,1493),c(1026,3338)))
 
 #Compare logFC across development between bees and ants
-d = lfcCor(antRes[[1]],beeRes[[1]])
-d[[1]]$Stage=d[[2]]$Stage = c("larva","pupa","adult_head","adult_mesosoma","adult_abdomen")
+d = lfcCor(antRes_allstage[[1]],beeRes_allstage[[1]])
+#d[[1]]$Stage=d[[2]]$Stage = c("larva","pupa","adult_head","adult_mesosoma","adult_abdomen")
+d[[1]]$Stage=d[[2]]$Stage = c("L2","L3","L4","L5","pupa","adult_head","adult_mesosoma","adult_abdomen")
 d[[1]]$Stage = d[[2]]$Stage = factor(d[[1]]$Stage,levels=d[[1]]$Stage)
 d[[1]]$type = "signed"
 d[[2]]$type = "unsigned"
@@ -766,6 +926,17 @@ worker_q = Abd[Abd$ant_logFC < 0 & Abd$bee_logFC > 0 & Abd$DE == "bothDE",]
 q_ext = merge(queen,ext,by.x = "Gene.x",by.y="Gene")
 w_ext = merge(worker,ext,by.x = "Gene.x",by.y="Gene")
 
+######Comparing to sex-biased and virgin-mated biased genes
+
+#Three-way venn for each species
+
+
+#log FC sex vs caste, v-m vs caste
+
+#Are conserved caste-biased genes more likely to be sex-biased? Could look at correlation just for conserved genes
+
+
+
 
 ########Part 2
 
@@ -819,6 +990,20 @@ dev.off()
 t = rbind(c(x[4,3],x[3,3]),c(x[2,3],x[1,3]))
 chisq.test(t) #Highly significant
 
+oggCaste <- function(a,b){
+  Aq = ogg11$OGG[ogg11$gene_Mphar %in% a[[2]]]
+  Anq = ogg11$OGG[ogg11$gene_Mphar %in% a[[3]]]
+  Bq = ogg11$OGG[ogg11$gene_Amel %in% b[[2]]]
+  Bnq = ogg11$OGG[ogg11$gene_Amel %in% b[[3]]]
+  qC = Aq[Aq %in% Bq]
+  nqC = Anq[Anq %in% Bnq]
+  bee_cons_q = ogg11$gene_Amel[ogg11$OGG %in% qC]
+  bee_cons_nq = ogg11$gene_Amel[ogg11$OGG %in% nqC]
+  ant_cons_q = ogg11$gene_Mphar[ogg11$OGG %in% qC]
+  ant_cons_nq = ogg11$gene_Mphar[ogg11$OGG %in% nqC]
+  return(list(list(ant_cons_q,bee_cons_q),list(ant_cons_nq,bee_cons_nq)))
+}
+
 AsexRes <- lapply(ant_sexDE,extractBias)
 AcasteRes <- lapply(antTests_oneLarv[[2]][c(3:5)],function(x) extractBias(x[[2]]))
 AvmRes <- lapply(ant_VM,extractBias)
@@ -838,6 +1023,62 @@ BFC_vm <- lapply(c(1:3),function(x) FCplot(BvmRes[[x]],BcasteRes[[x]]))
 BFC_NF_caste <- lapply(c(1:3),function(x) FCplot(BsocRes[[x]],BcasteRes[[x]]))
 BFC_NF_sex <- lapply(c(1:3),function(x) FCplot(BsocRes[[x]],BsexRes[[x]]))
 BFC_NF_vm <- lapply(c(1:3),function(x) FCplot(BsocRes[[x]],BvmRes[[x]]))
+
+AFCplot <- lapply(AFC,function(x) x[[1]]+ylab("queen/worker log2 FC")+xlab("queen/male log2 FC"))
+legend <- g_legend(AFCplot[[1]]+theme(legend.position="right"))
+
+png("~/GitHub/devnetwork/figures/scLFCant.png",height=2000,width=2000,res=300)
+grid.arrange(AFCplot[[1]]+theme(legend.position="hidden")+ggtitle("head"),
+             AFCplot[[2]]+theme(legend.position="hidden")+ggtitle("thorax"),
+             AFCplot[[3]]+theme(legend.position="hidden")+ggtitle("abdomen"),legend,ncol=2)
+dev.off()
+
+BFCplot <- lapply(BFC,function(x) x[[1]]+ylab("queen/worker log2 FC")+xlab("queen/male log2 FC"))
+legend <- g_legend(BFCplot[[1]]+theme(legend.position="right"))
+
+png("~/GitHub/devnetwork/figures/scLFCbee.png",height=2000,width=2000,res=300)
+grid.arrange(BFCplot[[1]]+theme(legend.position="hidden")+ggtitle("head"),
+             BFCplot[[2]]+theme(legend.position="hidden")+ggtitle("thorax"),
+             BFCplot[[3]]+theme(legend.position="hidden")+ggtitle("abdomen"),legend,ncol=2)
+dev.off()
+
+consCaste <- mapply(oggCaste,AcasteRes,BcasteRes,SIMPLIFY=FALSE)
+consSex <- mapply(oggCaste,AsexRes,BsexRes,SIMPLIFY=FALSE)
+consVM <- mapply(oggCaste,AvmRes,BvmRes,SIMPLIFY=FALSE)
+
+vennConserved <- function(caste,sex,vm,queen){
+  o = ogg11
+  o$Caste = o$Sex = o$VM = 0
+  o$Caste[o$gene_Mphar %in% caste[[queen]][[1]]] = 1
+  o$Sex[o$gene_Mphar %in% sex[[queen]][[1]]] = 1
+  o$VM[o$gene_Mphar %in% vm[[queen]][[1]]] = 1
+  x <- vennCounts(o[,c("Caste","Sex","VM")])
+  return(list(x,o))
+}
+
+Cq <- lapply(c(1:3),function(x) vennConserved(consCaste[[x]],consSex[[x]],consVM[[x]],1))
+Cw <- lapply(c(1:3),function(x) vennConserved(consCaste[[x]],consSex[[x]],consVM[[x]],2))
+
+AntSC = merge(AcasteRes[[3]][[1]],AsexRes[[3]][[1]],by = "Gene")
+AntSC$conCaste = 0
+AntSC$conCaste[AntSC$Gene %in% c(as.character(consCaste[[3]][[1]][[1]]),as.character(consCaste[[3]][[2]][[1]]))] = 1
+ggplot(AntSC,aes(x=-FC.x,y=-FC.y,color=as.factor(conCaste)))+
+  geom_point()+geom_smooth()
+
+BeeSC = merge(BcasteRes[[3]][[1]],BsexRes[[3]][[1]],by = "Gene")
+BeeSC$conCaste = 0
+BeeSC$conCaste[BeeSC$Gene %in% c(as.character(consCaste[[3]][[1]][[2]]),as.character(consCaste[[3]][[2]][[2]]))] = 1
+ggplot(BeeSC,aes(x=-FC.x,y=-FC.y,color=as.factor(conCaste)))+
+  geom_point()+geom_smooth()
+
+
+
+x <- vennCounts(ogg11[,c("DevBee","DevAnt")])
+
+#Figure 2a
+png("~/GitHub/devnetwork/figures/DevelomentalOverlap.png")
+vennDiagram(x,names = c("Apis","Mphar"))
+dev.off()
 
 
 #Identify developmental genes in Drosophila based on RNA-seq across development 
@@ -879,6 +1120,23 @@ DmelDat = merge(DmelDat,sexGenes,by = "Gene")
 
 Dmel_oggDat = merge(DmelDat,ogg3f,by.x="Gene",by.y="V2")
 Dogg = merge(Dmel_oggDat,ogg11,by="gene_Mphar")
+
+BcasteDmel <- lapply(BcasteRes,function(x) merge(x[[1]],Dmel_oggDat,by.x="Gene",by.y="gene_Amel"))
+BCd = lapply(BcasteDmel,function(x) cor.test(x$FC,x$logFC,method="spearman"))
+AcasteDmel <- lapply(AcasteRes,function(x) merge(x[[1]],Dmel_oggDat,by.x="Gene",by.y="gene_Mphar"))
+ACd = lapply(AcasteDmel,function(x) cor.test(x$FC,x$logFC,method="spearman"))
+
+dmelF_B <- Dmel_oggDat$gene_Amel[Dmel_oggDat$FDR < 0.05 & Dmel_oggDat$logFC < 0]
+dmelF_A <- Dmel_oggDat$gene_Amel[Dmel_oggDat$FDR < 0.05 & Dmel_oggDat$logFC < 0]
+
+Acaste <- c(BcasteRes[[3]][[3]])
+Acaste = Acaste[Acaste %in% Dmel_oggDat$gene_Amel]
+AoverQ <- sum(dmelF_A %in% Acaste)
+
+t <- rbind(c(AoverQ,length(dmelF_A) - AoverQ),
+           c(length(Acaste) - AoverQ,
+             nrow(Dmel_oggDat) - length(Acaste) - length(dmelF_A) + AoverQ))
+
 DoggM = Dogg[,c(3:19,22:34)]
 DoggM = melt(DoggM,id.vars = colnames(DoggM)[c(1:15)])
 ggplot(DoggM,aes(x = variable, y = eggCV, fill = as.factor(value)))+
@@ -935,13 +1193,6 @@ fisher.test(rbind(c(51,483),c(127+81+39,nrow(devA) - 127 - 39 - 81 - 483 + 51)),
 nGenes_consistentlyDE <- lapply(list(beeTests,beeTests_oneLarv,antTests,antTests_oneLarv),function(x){
   lapply(c(1,2,3),function(j) length(x[[3]][[j]]))
 })
-
-#There are, however some genes that are DE overall according to the model. We'll incorporate those below
-
-############
-###Part 3: Caste and social toolkits--in each species and the overlap
-############
-
 
 #########
 ##Calculating coefficient of variation
