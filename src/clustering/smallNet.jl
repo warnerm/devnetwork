@@ -1,19 +1,22 @@
 using Distributions
 #using DistributedArrays
 
+addprocs(ARGS[4])
+
 inputfile = ARGS[1]
 outputfile = ARGS[2]
 nGene = parse(Int,ARGS[3])+1
+@eval @everywhere num = $nGene
 println(nGene)
 println("start")
-spins = Vector{Int}(nGene)
 test_spins = Vector{Int}(nGene)
 Adj = falses(nGene,nGene)
-temp = 0.1
-epochs = 100
-current_energy = Float64
+
+@everywhere temp = 0.1
+@everywhere epochs = 10
+@everywhere current_energy = Float64
 MersenneTwister(0)
-tf(t) = 0.5*t
+tf(t) = 0.9*t
 itf(length) = floor(Int,1.0*length)
 
 open(inputfile) do file
@@ -25,58 +28,77 @@ open(inputfile) do file
     end
 end
 
-tot_pos = sum(Adj)
-pos_each = sum(Adj,1)
+@eval @everywhere Adj_all = $Adj
 
-function CalcEnergy(spins)
-    energy = 0
-    for i=1:nGene,j=1:nGene
+@everywhere tot_pos = sum(Adj_all)
+@everywhere pos_each = sum(Adj_all,1)
+
+@everywhere begin
+    function TotEnergy(i,j)
         if spins[i] == spins[j]
-            energy = energy + Adj[i,j] - pos_each[i]*pos_each[j]/(2*tot_pos)
+            return Adj_all[i,j] -  pos_each[i]*pos_each[j]/(2*tot_pos)
+        else
+            return 0
         end
     end
-    #energy = -energy
-    return energy
+end
+
+function CalcEnergy()
+    energy = pmap((args)->TotEnergy(args...),[[i,j] for i=1:num,j=1:num])
+    return -sum(energy)
 end
 
 function Initialize()
     for i=1:nGene
-        spins[i] = rand(1:nGene)
+        test_spins[i] = rand(1:nGene)
     end
-    return spins
+    return test_spins
+end
+
+@everywhere begin
+    function nodeEnergy(j)
+        if spins[j] ==  s
+            return (Adj_all[i,j]+Adj_all[j,i]) -  2*pos_each[i]*pos_each[j]/(2*tot_pos)
+        else
+            return 0
+        end
+    end
+end
+
+function calcPartial(node,indiv_spin)
+    @eval @everywhere i = $node
+    @eval @everywhere s = $indiv_spin
+    energy = pmap((args)->nodeEnergy(args...),[j for j=1:num])
+    return -sum(energy)
 end
 
 function move()
     node = rand(1:100)
-    spins[node]=rand(1:nGene)
-    return(spins)
-end
-
-function testMove(test_spins,true_spins)
+    edit_spin = rand(1:nGene)
+    oldEnergy = calcPartial(node,spins[node])
+    newEnergy = calcPartial(node,edit_spin)
     passed = 0
-    testEnergy = CalcEnergy(test_spins)
-    if testEnergy < current_energy
-        true_spins = test_spins
+    @eval @everywhere test_node = $node
+    if newEnergy < oldEnergy
+        @eval @everywhere spins[test_node] = $edit_spin
         passed = 1
     else
-        prob = exp((current_energy - testEnergy)/(temp))
+        prob = exp((oldEnergy - newEnergy)/(temp))
         if prob > rand(Uniform(0,1),1)[1]
-            true_spins = test_spins
+            @eval @everywhere spins[test_node] = $edit_spin
             passed = 1
         end
     end
-    return true_spins,passed
+    return passed
 end
 
-spins = Initialize()
-initial = CalcEnergy(spins)
-
+total_spins = Initialize()
+@eval @everywhere spins = $total_spins
+#
 for iter=1:100
     success = 0
     for e=1:epochs
-        current_energy = CalcEnergy(spins)
-        test_spins = move()
-        spins,passed = testMove(test_spins,spins)
+        passed = move()
         success = success+passed
     end
     println(success/epochs)
