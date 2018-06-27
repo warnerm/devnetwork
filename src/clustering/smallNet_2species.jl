@@ -8,10 +8,11 @@ addprocs(2)
 # input2 = ARGS[2]
 # output1 = ARGS[3]
 # output2 = ARGS[4]
-input1 = "../../../../Data/devnetwork/beeNetSmall.csv"
-input2 = "../../../../Data/devnetwork/ant100_net.csv"
-output1 = "../../../../Data/devnetwork/beeNetSmall_clust.csv"
-output2 = "../../../../Data/devnetwork/ant100_net_clust.csv"
+input2 = "../../../../Data/devnetwork/beeNetSmall.csv"
+input1 = "../../../../Data/devnetwork/ant100_net.csv"
+output2 = "../../../../Data/devnetwork/beeNetSmall_clust.csv"
+output1 = "../../../../Data/devnetwork/ant100_net_clust.csv"
+OGGfile = "../../../../Data/devnetwork/OGGmap.txt"
 
 #First, find number of genes
 function getNgene(file)
@@ -57,7 +58,10 @@ function calcPartial(node,indiv_spin,net)
     @eval @everywhere n = $net
     energy = pmap((args)->nodeEnergy(args...),[j for j=1:nGene[net]])
     #Add energy if orthologs are in the same module
-
+    ortholog = dict[net][node]
+    if spins[3-net][ortholog] == spins[net][node]
+        energy = energy + coupling_constant
+    end
     return -sum(energy)
 end
 
@@ -93,9 +97,25 @@ function move()
     return passed
 end
 
+function genDictionary(OGGfile)
+    dict1 = Dict{Int64,Int64}()
+    dict2 = Dict{Int64,Int64}()
+    open(OGGfile) do f
+        for ln in eachline(f)
+            sp = split(ln,"\t")
+            a1 = parse(Int,sp[1])
+            a2 = parse(Int,sp[2])
+            dict1[a1] = a2
+            dict2[a2] = a1
+        end
+    end
+    all_dict = [dict1,dict2]
+end
+
 temp = 0.1
 epochs = 5
 max_mods = 250
+coupling_constant = 3
 srand()
 
 #Functions to update temperature and number of iterations per epoch
@@ -107,27 +127,33 @@ nGene2 = getNgene(input2)
 Adj1 = getAdj(input1,nGene1)
 Adj2 = getAdj(input2,nGene2)
 
-@eval @everywhere nGene = [$nGene1,$nGene2]
-@eval @everywhere Adj_all = [$Adj1,$Adj2]
-
-@everywhere tot_pos = [sum(Adj_all[j]) for j=1:2]
-@everywhere pos_each = [sum(Adj_all[j],1) for j=1:2]
-spin_list = [Initialize(nGene[i]) for i=1:2]
-@eval @everywhere spins = $spin_list
-
-for iter=1:2
-    success = 0
-    for e=1:epochs
-        passed = move()
-        success = success+passed
-    end
-    println(success/epochs)
-    if success/epochs < 0.01 #Stop iterations if there are very few successes
-        break
-    end
-    temp = tf(temp)
-    epochs = itf(epochs)
-end
-
-writedlm(output1,spins[1])
-writedlm(output2,spins[2])
+#Load orthology, make a dictionary
+dict = genDictionary(OGGfile)
+println(dict[1][6262])
+println(dict[2][2885])
+#
+# @eval @everywhere nGene = [$nGene1,$nGene2]
+# @eval @everywhere Adj_all = [$Adj1,$Adj2]
+#
+# @everywhere tot_pos = [sum(Adj_all[j]) for j=1:2]
+# @everywhere pos_each = [sum(Adj_all[j],1) for j=1:2]
+# spin_list = [Initialize(nGene[i]) for i=1:2]
+# @eval @everywhere spins = $spin_list
+#
+#
+# for iter=1:2
+#     success = 0
+#     for e=1:epochs
+#         passed = move()
+#         success = success+passed
+#     end
+#     println(success/epochs)
+#     if success/epochs < 0.01 #Stop iterations if there are very few successes
+#         break
+#     end
+#     temp = tf(temp)
+#     epochs = itf(epochs)
+# end
+#
+# writedlm(output1,spins[1])
+# writedlm(output2,spins[2])
