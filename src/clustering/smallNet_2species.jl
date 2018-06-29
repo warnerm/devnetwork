@@ -67,13 +67,15 @@ function calcPartial(node,indiv_spin,net)
     if haskey(dict[net],node)
         OGG = dict[net][node]
         partners = dict_ogg[3-net][OGG]
+        numSame = 0
         for i=1:length(partners)
             if partners[i] != 0 && partners[i] <= nGene[3-net]
                 if spins[3-net][partners[i]] == indiv_spin
-                    energy_all = energy_all + coupling_constant*weights[OGG]
+                    numSame = numSame + 1
                 end
             end
         end
+        energy_all = energy_all + coupling_constant*weights[OGG]*numSame
     end
     return -energy_all
 end
