@@ -31,13 +31,13 @@ end
 
 #From file giving list of directed connections, make an adjacency matrix
 function getAdj(file,nGene)
-    Adj = zeros(nGene,nGene)
+    Adj = falses(nGene,nGene)
     open(file) do f
         for ln in eachline(file)
             sp = split(ln,"\t")
             a1 = parse(Int,sp[1]) + 1
             a2 = parse(Int,sp[2]) + 1
-            Adj[a1,a2] = 1
+            Adj[a1,a2] = true
         end
     end
     return Adj
@@ -45,9 +45,9 @@ end
 
 #Intialize spins with random modules
 function Initialize(nGene)
-    spin = Vector{Int64}(nGene)
+    spin = Vector{UInt8}(nGene)
     for i=1:nGene
-        spin[i] = rand(1:max_mods)
+        spin[i] = convert(UInt8,rand(1:max_mods))
     end
     return spin
 end
@@ -55,17 +55,21 @@ end
 #calculate the energy for a given node/spin, given the rest of the network as is
 function calcPartial(node,indiv_spin,net)
     @eval @everywhere i = $node
-    @eval @everywhere s = $indiv_spin
     @eval @everywhere n = $net
-    energy = pmap((args)->nodeEnergy(args...),[j for j=1:nGene[net]])
-    energy_all = sum(energy)
+    sameMod = [j for j in  1:nGene[net] if spins[net][j] == indiv_spin]
+    if length(sameMod) != 0
+        energy = pmap((args)->nodeEnergy(args...),sameMod)
+        energy_all = sum(energy)
+    else
+        energy_all = 0
+    end
     #Add energy if orthologs are in the same module
     if haskey(dict[net],node)
         OGG = dict[net][node]
         partners = dict_ogg[3-net][OGG]
         for i=1:length(partners)
             if partners[i] != 0 && partners[i] <= nGene[3-net]
-                if spins[3-net][partners[i]] == spins[net][node]
+                if spins[3-net][partners[i]] == indiv_spin
                     energy_all = energy_all + coupling_constant*weights[OGG]
                 end
             end
@@ -77,11 +81,7 @@ end
 @everywhere begin
     #Objective function to test energy with respect to given node
     function nodeEnergy(j)
-        if spins[n][j] ==  s
-            return (Adj_all[n][i,j]+Adj_all[n][j,i] -  pos_out[n][i]*pos_in[n][j]/(2*tot_pos[n]) - pos_in[n][i]*pos_out[n][j]/(2*tot_pos[n]))
-        else
-            return 0
-        end
+        return (Adj_all[n][i,j]+Adj_all[n][j,i] -  pos_out[n][i]*pos_in[n][j]/(2*tot_pos[n]) - pos_in[n][i]*pos_out[n][j]/(2*tot_pos[n]))
     end
 end
 
@@ -90,7 +90,7 @@ function move()
     node = rand(1:nGene[net])
     edit_spin = copy(spins[net][node])
     while edit_spin == spins[net][node]
-        edit_spin = rand(1:max_mods)
+        edit_spin = convert(UInt8,rand(1:max_mods))
     end
     oldEnergy = calcPartial(node,spins[net][node],net)
     newEnergy = calcPartial(node,edit_spin,net)
