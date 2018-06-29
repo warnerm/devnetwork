@@ -28,7 +28,7 @@ def InOut(argv):
 def getRanks(i):
     d = df.iloc[i]
     s = sorted(range(len(d)), key = lambda k: -d[k])
-    return s[1:100] #First value is the index
+    return s[1:15] #First value is the index
 
 #Returns the top three genes connected to the given gene
 def NextThreeGenes(new_cluster,gene):
