@@ -1,10 +1,10 @@
-inputfile = "../../../../Data/devnetwork/ant100_net.csv"
-adjFile = "../../../../Data/devnetwork/antsSMALLpCor.csv"
-outPre = "../../../../Data/devnetwork/antSmall"
+# inputfile = "../../../../Data/devnetwork/ant100_net.csv"
+# adjFile = "../../../../Data/devnetwork/antsSMALLpCor.csv"
+# outPre = "../../../../Data/devnetwork/antSmall"
 #
-# inputfile = ARGS[1]
-# adjFile = ARGS[2]
-# outPre = ARGS[3]
+inputfile = ARGS[1]
+adjFile = ARGS[2]
+outPre = ARGS[3]
 
 outPos = string(outPre,"pos.txt")
 outNeg = string(outPre,"neg.txt")
