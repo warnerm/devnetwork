@@ -89,23 +89,22 @@ end
 
 function move()
     net = rand(1:2)
-    node = rand(1:nGene[net])
+    @time node = rand(1:nGene[net])
     edit_spin = copy(spins[net][node])
     while edit_spin == spins[net][node]
         edit_spin = convert(UInt8,rand(1:max_mods))
     end
-    oldEnergy = calcPartial(node,spins[net][node],net)
-    newEnergy = calcPartial(node,edit_spin,net)
+    @time oldEnergy = calcPartial(node,spins[net][node],net)
+    @time newEnergy = calcPartial(node,edit_spin,net)
     passed = 0
-    @eval @everywhere test_node = $node
     if newEnergy < oldEnergy
-        spins[net][test_node] = edit_spin
+        spins[net][node] = edit_spin
         passed = 1
     else
         prob = exp(-(newEnergy - oldEnergy)/(temp))
-        test_num = rand(Uniform(0,1))
+        @time test_num = rand(Uniform(0,1))
         if prob > test_num
-            spins[net][test_node] = edit_spin
+            spins[net][node] = edit_spin
             passed = 1
         end
     end
