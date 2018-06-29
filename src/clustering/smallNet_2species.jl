@@ -1,19 +1,25 @@
 using Distributions
 #using DistributedArrays
 
-addprocs(parse(Int,ARGS[6]))
+# addprocs(parse(Int,ARGS[6]))
 #
-input1 = ARGS[1]
-input2 = ARGS[2]
-output1 = ARGS[3]
-output2 = ARGS[4]
-OGGmap = ARGS[5]
-# input2 = "../../../../Data/devnetwork/beeNetSmall.csv"
-# input1 = "../../../../Data/devnetwork/ant100_net.csv"
-# output2 = "../../../../Data/devnetwork/beeNetSmall_clust.csv"
-# output1 = "../../../../Data/devnetwork/ant100_net_clust.csv"
-# OGGmap = "../../../../Data/devnetwork/OGGmap.txt"
-# addprocs(2)
+# input1 = ARGS[1]
+# input2 = ARGS[2]
+# output1 = ARGS[3]
+# output2 = ARGS[4]
+# OGGmap = ARGS[5]
+
+input2 = "../../../../Data/devnetwork/beeSmall"
+input1 = "../../../../Data/devnetwork/antSmall"
+output2 = "../../../../Data/devnetwork/beeNetSmall_clust.csv"
+output1 = "../../../../Data/devnetwork/ant100_net_clust.csv"
+OGGmap = "../../../../Data/devnetwork/OGGmap.txt"
+addprocs(2)
+
+pos1 = string(input1,"pos.txt")
+neg1 = string(input1,"neg.txt")
+pos2 = string(input2,"pos.txt")
+neg2 = string(input2,"neg.txt")
 
 #First, find number of genes
 function getNgene(file)
@@ -83,7 +89,9 @@ end
 @everywhere begin
     #Objective function to test energy with respect to given node
     function nodeEnergy(j)
-        return (Adj_all[n][i,j]+Adj_all[n][j,i] -  (pos_out[n][i]*pos_in[n][j]+pos_in[n][i]*pos_out[n][j])/(2*tot_pos[n]))
+        return (Adj_all_pos[n][i,j]+Adj_all_pos[n][j,i] - Adj_all_neg[n][i,j] - Adj_all_neg[n][j,i] -
+          (pos_out[n][i]*pos_in[n][j]+pos_in[n][i]*pos_out[n][j])/(2*tot_pos[n]) +
+          (neg_out[n][i]*neg_in[n][j]+neg_in[n][i]*neg_out[n][j])/(2*tot_neg[n]))
     end
 end
 
@@ -151,20 +159,30 @@ srand()
 tf(t) = 0.5*t
 itf(length) = floor(Int,1.0*length)
 
-nGene1 = getNgene(input1)
-nGene2 = getNgene(input2)
-Adj1 = getAdj(input1,nGene1)
-Adj2 = getAdj(input2,nGene2)
+nGene1 = getNgene(pos1)
+nGene1n = getNgene(neg1)
+nGene1 = max(nGene1,nGene1n)
+nGene2 = getNgene(pos2)
+nGene2n = getNgene(neg2)
+nGene2 = max(nGene2,nGene2n)
+Adj1pos = getAdj(pos1,nGene1)
+Adj1neg = getAdj(neg1,nGene1)
+Adj2pos = getAdj(pos2,nGene2)
+Adj2neg = getAdj(neg2,nGene2)
 
 #Load orthology, make a dictionary
 dict,dict_ogg,weights = genDictionary(OGGmap)
 
 nGene = [nGene1,nGene2]
-@eval @everywhere Adj_all = [$Adj1,$Adj2]
+@eval @everywhere Adj_all_pos = [$Adj1pos,$Adj2pos]
+@eval @everywhere Adj_all_neg = [$Adj1neg,$Adj2neg]
 
-@everywhere tot_pos = [sum(Adj_all[j]) for j=1:2]
-@everywhere pos_in = [sum(Adj_all[j],1) for j=1:2]
-@everywhere pos_out = [sum(Adj_all[j],2) for j=1:2]
+@everywhere tot_pos = [sum(Adj_all_pos[j]) for j=1:2]
+@everywhere pos_in = [sum(Adj_all_pos[j],1) for j=1:2]
+@everywhere pos_out = [sum(Adj_all_pos[j],2) for j=1:2]
+@everywhere tot_neg = [sum(Adj_all_neg[j]) for j=1:2]
+@everywhere neg_in = [sum(Adj_all_neg[j],1) for j=1:2]
+@everywhere neg_out = [sum(Adj_all_neg[j],2) for j=1:2]
 
 spins = [Initialize(nGene[i]) for i=1:2]
 
