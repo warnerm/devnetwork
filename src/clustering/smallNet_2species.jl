@@ -62,11 +62,9 @@ function calcPartial(node,indiv_spin,net)
     if haskey(dict[net],node)
         OGG = dict[net][node]
         partners = dict_ogg[3-net][OGG]
-        println(partners)
         for i=1:length(partners)
             if partners[i] != 0 && partners[i] <= nGene[3-net]
                 if spins[3-net][partners[i]] == spins[net][node]
-                    println("ortholog found")
                     energy_all = energy_all + coupling_constant*weights[OGG]
                 end
             end
@@ -94,22 +92,16 @@ function move()
         edit_spin = rand(1:max_mods)
     end
     oldEnergy = calcPartial(node,spins[net][node],net)
-    println("old energy is $oldEnergy")
     newEnergy = calcPartial(node,edit_spin,net)
-    println("new energy is $newEnergy")
     passed = 0
     @eval @everywhere test_node = $node
     if newEnergy < oldEnergy
-        println("passed automatically")
         @eval @everywhere spins[$net][test_node] = $edit_spin
         passed = 1
     else
         prob = exp(-(newEnergy - oldEnergy)/(temp))
-        println("prob is $prob")
         test_num = rand(Uniform(0,1))
-        println("test_num is $test_num")
         if prob > test_num
-            println("passed")
             @eval @everywhere spins[$net][test_node] = $edit_spin
             passed = 1
         end
@@ -147,14 +139,14 @@ function genDictionary(OGGfile)
     return all_dict,all_ogg,weights
 end
 
-temp = 10
-epochs = 100
+temp = .05
+epochs = 50
 max_mods = 250
 coupling_constant = 3
 srand()
 
 #Functions to update temperature and number of iterations per epoch
-tf(t) = 0.9*t
+tf(t) = 0.5*t
 itf(length) = floor(Int,1.0*length)
 
 nGene1 = getNgene(input1)
