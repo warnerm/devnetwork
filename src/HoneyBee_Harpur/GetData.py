@@ -6,9 +6,13 @@
 
 import pandas as pd 
 from subprocess import call
-sra = pd.read_table('SraRunTable.txt')
-keys = sra.iloc[:,6]
+import sys
+sra = pd.read_table('../data/SraRunTable.txt',header=None)
+key1 = int(sys.argv[1])
+key2 = int(sys.argv[2])
+
+keys = sra.iloc[key1:key2,6]
 
 #Fastq-dump commands from https://edwards.sdsu.edu/research/fastq-dump/
 for key in keys:
-	call(["fastq-dump",key,"gzip","--read-filter","pass","--outdir","fastq","--skip-technical"])
+	call(["fastq-dump",key,"gzip","--read-filter","pass","--outdir","../data/fastq","--skip-technical"])

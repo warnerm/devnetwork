@@ -8,14 +8,14 @@ node_file = "../data/nodes.dmp"
 cellular_node = 131567 #The node that is cellular organism
 all_node = 1 #Viruses will hit this node
 
-connection = sqlite3.connect('../data/taxonomy_hym.db')
+connection = sqlite3.connect('../data/taxonomy_extra.db')
 
 cursor = connection.cursor()
 
 #Create the sql database if it doesn't exist
 #if not os.path.isfile("taxonomy.db"):
 sql_command = """
-CREATE TABLE taxonomy_hym (
+CREATE TABLE taxonomy_extra (
 species_number INTEGER PRIMARY KEY,
 tax_id INT,
 lineage VARCHAR(200)
@@ -44,11 +44,11 @@ def addTax(node):
 			if found == 0: return 0
 	
 	lineage = lineage[:-2] #Remove last semi-colon
-	connection = sqlite3.connect('../data/taxonomy_hym.db')
+	connection = sqlite3.connect('../data/taxonomy_extra.db')
 
 	cursor = connection.cursor()
 
-	format_str = """INSERT INTO taxonomy_hym (species_number,tax_id,lineage)
+	format_str = """INSERT INTO taxonomy_extra (species_number,tax_id,lineage)
 		VALUES (NULL,"{tax_id}","{lineage}");"""
 	sql_command = format_str.format(tax_id=tax_id,lineage=lineage)
 	cursor.execute(sql_command)

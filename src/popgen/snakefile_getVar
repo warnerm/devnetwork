@@ -1,22 +1,84 @@
-SAMPLES = ,glob_wildcards("fastq/{sample}_pass.fastq")
-REF = "ref/GCF_000002195.4_Amel_4.5_genomic.fna"
-GFF = "ref/GCF_000002195.4_Amel_4.5_genomic.gff"
+SAMPLES, = glob_wildcards("../data/fastq/{sample}_pass.fastq")
+REF = "../ref/GCF_000002195.4_Amel_4.5_genomic.fna"
+GFF = "../ref/GCF_000002195.4_Amel_4.5_genomic.gff"
+GATK = "/home/warnerm/programs/bin/gatk-package-4.0.5.0-local.jar"
 THREADS = 12
+CALLER=["freebayes", "samtools", "GATK", "platypus"]
 
 rule all:
-	expand("alignments/{sample}.bam",sample=SAMPLES)
+	input: expand("../temp/alignments/{sample}.bam",sample=SAMPLES)
 
 rule buildBowtie:
-	output: "ref/Amel.1.ebwt"
-	shell: "bowtie-build {REF} ref/Amel"
+	input: REF
+	output: "../ref/Amel.1.bt2"
+	shell: "bowtie2-build {REF} ../ref/Amel"
 
 rule alignReads:
-	input: "ref/Amel.1.ebwt",samp="fastq/{sample}_pass.fastq"
-	output: "alignments/{sample}.sam"
-	shell: """bowtie2 -x ref/Amel -U {input[samp]} -p {THREADS} > {output}"""
+	input: "../ref/Amel.1.bt2",samp="../data/fastq/{sample}_pass.fastq"
+	output: "../temp/alignments/{sample}.bam"
+	shell: """bowtie2 -x ../ref/Amel -U {input[samp]} -p {THREADS} | samtools view -bSF4 > {output}; rm {input[samp]}"""
 
-rule toBAM:
-	input: "alignments/{sample}.sam"
-	output: "alignments/{sample}.bam"
-	shell: """samtools view -Sb {input} samtools sort - > {output}; \
-			samtools index {output}"""
+#rule makeBED:
+#	input: GFF
+#	output: "../ref/exons.bed"
+#	shell: """grep "exon" {GFF} | gff2bed > {output}"""
+
+#'-=' means report genome qualities, the params makes a list of input files, min-alternate-count sets minimum number of chromosomes sampled to consider an allele
+#Using target= exons.bed because we only want to call variants for exons
+#rule freeBayes:
+#	input: expand("../temp/alignments/{sample}.bam",sample=SAMPLES),bed = "../ref/exons.bed"
+#	output: protected("../var/freebayes.vcf")
+#	params: files = "-b " + " -b ".join(expand("../temp/alignments/{sample}.bam",sample=SAMPLES))
+#	shell: "freebayes -= {params.files} -v {output} -f {REF} --min-alternate-count 4 --target {input[bed]} --use-best-n-alleles 3"
+
+#rule GATK:
+#	input: expand("../temp/alignments/{sample}.bam",sample=SAMPLES),bed = "../ref/exons.bed"
+#	output: protected("../var/GATK.vcf")
+#	params: files = "-I " + " -I ".join(expand("../temp/alignments/{sample}.bam",sample=SAMPLES))
+#	shell: """java -Xmx30g -jar {GATK} -nt {THREADS} -allowPotentiallyMisencodedQuals  -T HaplotypeCaller -R  {REF} {params.files} -hets 0.002  -mbq 20 -o {output} --max_alternate_alleles 3 -L ../ref/exons.bed"""
+
+#rule samtools:
+#	input: BAMs = expand("../temp/alignments/{sample}.bam",sample=SAMPLES),bed = "../ref/exons.bed"
+#	output: protected("../var/samtools.vcf")
+#	shell: "samtools mpileup -l {input[bed]} -ugf {REF} {input[BAMs]} | bcftools call -vc - | vcfutils.pl varFilter -D 500 > {output}"
+
+#rule platypus:
+#	input: expand("../temp/alignments/{sample}.bam",sample=SAMPLES),bed = "../ref/exons.bed"
+#	output: protected("../var/platypus.vcf")
+#	params: files = ",".join(expand("alignments/{sample}.bam",sample=SAMPLES))
+#	shell: "python2.7 /home/warnerm/local_install/platypus_0.8.1/Platypus.py callVariants --nCPU={THREADS} --refFile={REF} --bamFiles={params.files} --output={output} --regions {input[bed]} --maxReads=25000000"
+
+#rule allelicPrimitives:
+#	input: "../var/{VCFcaller}.vcf"
+#	output: "../var/{VCFcaller}.primitives.vcf"
+#	shell: "gatk --java-options "-Xmx14g" VariantsToAllelicPrimitives -R {REF} --variant {input} -o {output}"
+
+# generate consensus SNP calls
+#rule BAYSIC: 	
+#	input: expand("../data/popgen/var/{VCFcaller}.primitives.vcf", VCFcaller=CALLER)
+#	output: "../data/popgen/var/consensus.vcf.pos"
+#	version: "1.0"
+#	run: 
+#		infiles = "".join([" --vcf " + i for i in input])
+#		shell("baysic.pl --statsOutFile ../data/popgen/var/combined.stats --pvalCutoff 0.8 {} --countsOutFile ../data/popgen/var/combined.cts --vcfOutFile ../data/popgen/var/consensus.vcf".format(infiles))
+
+# select consensus sites, and remove non-snps
+#rule consensusFilter:
+#    input: "../data/popgen/var/freebayes.primitives.vcf", rules.BAYSIC.output
+#     output: "../data/popgen/var/final.recode.vcf"
+#    shell: "vcftools --vcf {input[0]} --positions {input[1]} --remove-indv Pelegans  --max-alleles 2 --remove-indels --max-missing 0.9 --recode --mac 1 --out  ../data/popgen/var/final"
+
+# estimate SNP effects
+#rule snpEff:
+#	input: rules.consensusFilter.output
+#	output: "../data/popgen/var/snpEff.txt"
+#	shell: "java -Xmx7g -jar /apps/unit/MikheyevU/sasha/snpEff4/snpEff.jar -no-utr -no-upstream -no-intron -no-intergenic -no-downstream pmuc {input} >  {output}"
+#	""" python parse_silentReplacement.py ../ref/csd.fa temp.txt > {output} && rm temp.txt """
+
+#rule getCDS:
+#	input: GFF, REF
+#	output: "../ref/cds.fa"
+#	shell: "gffread {input[0]} -g {input[1]} -x {output}"
+
+
+

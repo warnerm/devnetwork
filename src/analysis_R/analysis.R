@@ -158,20 +158,7 @@ speciesCasteDE <- function(d,f,factorFun){
   return(list(genesDE,genesInt,genesDE_noInt,caste,caste2))
 }
 
-#Return list of DE genes at each stage
-speciesCasteStage <- function(d,f,factorFun){
-  f = factorFun(f)
-  d <- d[,colnames(d) %in% f$sample]
-  results = list()
-  for (lev in levels(f$tissue_stage)){
-    fs = droplevels(f[grepl(as.character(lev),f$tissue_stage),])
-    ds <- d[,colnames(d) %in% rownames(fs)]
-    design <- model.matrix(~caste,data=fs) #bee L4 only came from 1 colony
-    caste <- EdgeR(ds,design,2)
-    results[[lev]]=list(genes=rownames(caste)[caste$FDR<0.05],results=caste)
-  }
-  return(results)
-}
+
 
 #Take output of 'speciesCasteStage' to identify genes DE at each stage; also genes with consistent logFC
 speciesCasteAllStage <- function(stageRes){
@@ -211,11 +198,11 @@ speciesDEtests <- function(d,f,factorFun){
 
 #Return logFC and FDR across development
 collapseLogFC <- function(resList){
-  d1 = d2 = data.frame(Gene = rownames(resList[[1]][[2]]))
-  d1$L2 = resList[[1]][[2]]$logFC
-  d2$L2 = resList[[1]][[2]]$FDR
+  d1 = d2 = data.frame(Gene = rownames(resList[[1]]))
+  d1$L2 = resList[[1]]$logFC
+  d2$L2 = resList[[1]]$FDR
   for (i in 2:length(resList)){
-    dN = resList[[i]][[2]]
+    dN = resList[[i]]
     dN$Gene = rownames(dN)
     colnames(dN)[c(1,5)] = rep(names(resList)[i],2)
     d1 = merge(d1,dN[,c(1,6)],by = "Gene")
@@ -291,6 +278,8 @@ lfcCor <- function(antD,beeD){
   return(list(d,dAbs))
 }
 
+
+
 #Return list of nurse/forager DE genes for each tissue
 speciesSocial <- function(d,f){
   f = droplevels(f[!is.na(f$NF),])
@@ -301,6 +290,20 @@ speciesSocial <- function(d,f){
     ds <- d[,colnames(d) %in% rownames(fs)]
     design <- model.matrix(~NF+colony,data=fs)
     results[[lev]] <- EdgeR(ds,design,2)
+  }
+  return(results)
+}
+
+#Return list of DE genes at each stage
+speciesCaste <- function(d,f,factorFun){
+  f = factorFun(f)
+  d <- d[,colnames(d) %in% f$sample]
+  results = list()
+  for (lev in levels(f$tissue_stage)){
+    fs = droplevels(f[grepl(as.character(lev),f$tissue_stage),])
+    ds <- d[,colnames(d) %in% rownames(fs)]
+    design <- model.matrix(~caste,data=fs) #bee L4 only came from 1 colony
+    results[[lev]] = EdgeR(ds,design,2)
   }
   return(results)
 }
@@ -503,16 +506,52 @@ extractBias <- function(DEres){
 #Generate plot of log fold change of two DE results, with DE genes highlighted
 FCplot <- function(test1,test2){
   FC = merge(test1[[1]],test2[[1]],by = "Gene")
-  FC$DE = "nonDE"
-  FC$DE[FC$Gene %in% c(test1[[2]],test2[[2]],test1[[3]],test2[[3]])] = "DE-inconsistent"
-  FC$DE[(FC$Gene %in% test1[[2]] & FC$Gene %in% test2[[3]]) | (FC$Gene %in% test1[[3]] & FC$Gene %in% test2[[2]])] = "DE-opp"
+  FC$DE = "nonDE/inconsistent"
+  #FC$DE[FC$Gene %in% c(test1[[2]],test2[[2]],test1[[3]],test2[[3]])] = "DE-inconsistent"
+  #FC$DE[(FC$Gene %in% test1[[2]] & FC$Gene %in% test2[[3]]) | (FC$Gene %in% test1[[3]] & FC$Gene %in% test2[[2]])] = "DE-opp"
   FC$DE[FC$Gene %in% test1[[2]] &FC$Gene %in% test2[[2]]] = "Queen-upreg"
   FC$DE[FC$Gene %in% test1[[3]] &FC$Gene %in% test2[[3]]] = "Queen-downreg"
   p <- ggplot(FC,aes(x = -FC.x,y = -FC.y))+ #Queen-up will be positive
-    geom_point(aes(color = DE))+
-    geom_smooth(method="lm",se=FALSE)+
-    theme_bw()
+    geom_point(aes(color = DE),alpha=0.5)+
+    geom_smooth(method="lm",se=FALSE,color="black")+
+    scale_color_manual(values = c("grey60","blue","red"))+
+    main_theme
   return(list(p,cor.test(FC$FC.x,FC$FC.y,method = "spearman"),table(FC$DE)))
+}
+
+
+#Generate plot of log fold change of two DE results, with DE genes highlighted
+FCplot_filt <- function(test1,test2){
+  FC = merge(test1[[1]],test2[[1]],by = "Gene")
+  FC$DE = "inconsistent"
+  #FC$DE[FC$Gene %in% c(test1[[2]],test2[[2]],test1[[3]],test2[[3]])] = "DE-inconsistent"
+  #FC$DE[(FC$Gene %in% test1[[2]] & FC$Gene %in% test2[[3]]) | (FC$Gene %in% test1[[3]] & FC$Gene %in% test2[[2]])] = "DE-opp"
+  FC$DE[FC$Gene %in% test1[[2]] &FC$Gene %in% test2[[2]]] = "Queen-upreg"
+  FC$DE[FC$Gene %in% test1[[3]] &FC$Gene %in% test2[[3]]] = "Queen-downreg"
+  p <- ggplot(FC,aes(x = -FC.x,y = -FC.y))+ #Queen-up will be positive
+    geom_point(aes(color = DE),alpha=0.5)+
+    scale_color_manual(values = c("grey60","blue","red"))+
+    main_theme
+  return(list(p,cor.test(FC$FC.x,FC$FC.y,method = "spearman"),table(FC$DE)))
+}
+
+#Parse social results
+parseDE <- function(tests,name1,name2){
+  tests <- lapply(tests,function(x) cbind(x,Gene=rownames(x)))
+  all_test <- Reduce(function(x,y) {merge(x,y,by="Gene")},tests)
+  all_test2 <- all_test[,c(1,seq(2,(5*length(tests) + 1),by=5))]
+  all_test3 <- all_test[,c(1,seq(6,(5*length(tests) + 1),by=5))]
+  colnames(all_test2) = c("Gene",names(tests))
+  DEtest = all_test2
+  DEres <- do.call(cbind,(lapply(1:length(tests),function(j){
+    apply(all_test2,1,function(x){
+      if (tests[[j]]$FDR[tests[[j]]$Gene==x[1]] < 0.05 & tests[[j]]$logFC[tests[[j]]$Gene==x[1]] > 0 ) name1
+      else if (tests[[j]]$FDR[tests[[j]]$Gene==x[1]] < 0.05 & tests[[j]]$logFC[tests[[j]]$Gene==x[1]] < 0 ) name2
+      else "nonDE"
+    })
+  })))
+  DEtest[,c(2:ncol(all_test2))] = DEres
+  return(list(all_test2,DEtest,all_test3))
 }
 
 grid_arrange_shared_legend <- function(..., ncol = length(list(...)), nrow = 1, position = c("bottom", "right","top")) {
@@ -565,6 +604,226 @@ DEoverlap <- function(d, caste, species,larv = TRUE){
                main.cex = 1.5)
 }
 
+DEoverlap_soc <- function(d, caste, species){
+  labels = c("head","mesosoma","abdomen")
+  v = apply(d[,c(2:ncol(d))],2,function(x) d$Gene[x==caste])
+  names(v) = labels
+  venn.diagram(v,filename = paste("~/GitHub/devnetwork/figures/venn",caste,species,".png",sep="_"),
+               main = paste(species,caste,sep=", "),
+               imagetype = "png",
+               main.cex = 1.5)
+}
+
+
+#New ortholog definition; merging phylostrata results
+mergeRes <- function(tax_id,species,taxNames,fullName){
+  TGmap <- read.table(paste("~/GitHub/devnetwork/phylo_results/TGmap_",species,".txt",sep=""))
+  blast <- read.table(paste("~/GitHub/devnetwork/phylo_results/",tax_id,"_",species,"_blastRes.tab",sep=""))
+  mainPS <- read.table(paste("~/GitHub/devnetwork/phylo_results/",species,"_",tax_id,"_ps",sep=""))
+  METogg <- read.table(paste("~/GitHub/devnetwork/phylo_results/",species,"_",tax_id,"_METs",sep=""))
+  ENDogg <- read.table(paste("~/GitHub/devnetwork/phylo_results/",species,"_",tax_id,"_END",sep=""))
+  
+  mainPS = mainPS[!duplicated(mainPS),]
+  ogg = merge(METogg,ENDogg,by="V1",all=TRUE)
+  colnames(ogg) = c("ODB_gene","OGGmet","OGGend")
+  oggBlast = merge(ogg,blast[,c(1,3)],by.x="ODB_gene",by.y="V3",all.x=TRUE)
+  colnames(oggBlast)[4] = "transcript"
+  oggPS = merge(oggBlast,mainPS,by.x="OGGmet",by.y="V1",all=TRUE)
+  oggG = merge(oggPS,TGmap,by.x="transcript",by.y="V2")
+  colnames(oggG)[c(5,6)] = c("ps","Gene")
+  
+  if (tax_id != 7227){ #Skip for drosophila
+    extraPS <- read.table(paste("~/GitHub/devnetwork/phylo_results/",species,"_",tax_id,"_extra_ps",sep=""))
+    extraPS$OGGmet = extraPS$ODB_gene = extraPS$OGGend = rep(NA,nrow(extraPS))
+    extraPS = merge(extraPS,TGmap,by.x="V1",by.y="V2")
+    colnames(extraPS) = c("transcript","ps","OGGend","ODB_gene","OGGmet","Gene")
+    oggG = oggG[!oggG$Gene %in% extraPS$Gene,]
+    oggG = rbind(oggG,extraPS)
+  }
+  
+  #Take oldest ps per gene
+  oggGs <- ddply(oggG, ~ Gene + OGGmet + ODB_gene + OGGend,summarise,
+                 ps = min(ps,na.rm=TRUE))
+  
+  taxNames = c(taxNames,fullName)
+  maxPS = length(taxNames)
+  oggGs$ps[oggGs$ps==40]=maxPS
+  oggGs$psName = apply(oggGs,1,function(x) taxNames[as.integer(as.character(x[5]))])
+  
+  return(oggGs)
+}
+
+mergeRes2 <- function(tax_id,species,taxNames,fullName,psFile){
+  TGmap <- read.table(paste("~/GitHub/devnetwork/phylo_results/TGmap_",species,".txt",sep=""))
+  blast <- read.table(paste("~/GitHub/devnetwork/phylo_results/",tax_id,"_",species,"_blastRes.tab",sep=""))
+  PS <- read.table(paste("~/GitHub/devnetwork/phylo_results/",psFile,sep=""))
+  ACUogg <- read.table(paste("~/GitHub/devnetwork/phylo_results/",species,"_acu",sep=""))
+  
+  mainPS = PS[!duplicated(PS),]
+  oggBlast = merge(ACUogg,blast[,c(1,3)],by.x="V1",by.y="V3",all.x=TRUE)
+  colnames(oggBlast)[3] = "transcript"
+  oggPS = merge(oggBlast,mainPS,by.x="transcript",by.y="V1",all=TRUE)
+  oggG = merge(oggPS,TGmap,by.x="transcript",by.y="V2")
+  colnames(oggG) = c("transcript","ODBgene","OGGacu","ps","Gene")
+  
+  #Take oldest ps per gene
+  oggGs <- ddply(oggG, ~ Gene + ODBgene + OGGacu,summarise,
+                 ps = min(as.numeric(as.character(ps)),na.rm=TRUE))
+  
+  taxNames = c(taxNames,fullName)
+  maxPS = length(taxNames)
+  oggGs$ps[oggGs$ps==40]=maxPS
+  oggGs$psName = apply(oggGs,1,function(x) taxNames[as.integer(as.character(x[4]))])
+  
+  return(oggGs)
+}
+
+#Make mosaic and bar plot of ps
+psMosaic <- function(DEres,ps,pLev,stage){
+  ps = ps[!is.na(ps$psName),]
+  DEres = merge(DEres,ps,by="Gene")
+  aM <- melt(DEres,id.vars=colnames(ps))
+  aM$value = factor(aM$value,levels=c("nonDE","worker","queen"))
+  aM$psName = factor(aM$psName,levels = pLev)
+  p1 <- ggplot(data=aM[aM$variable==stage,])+
+    geom_mosaic(aes(x = product(psName,value),
+                    fill = factor(psName)))+
+    ylab("proportion of DE genes")+
+    xlab("Stage")+
+    main_theme+
+    theme(legend.title = element_blank())+
+    theme(axis.text.x = element_text(angle = -25,hjust=0.1))+
+    scale_x_productlist(labels = levels(aM$value),breaks = c(0.3,0.75,0.9))
+  
+  
+  p2 <- ggplot(aM[aM$variable==stage,],aes(x = value,fill=psName))+
+    geom_bar(stat="count")+
+    main_theme+
+    theme(legend.title = element_blank())
+  return(list(p1,p2))
+}
+
+#Plot fold change of phylostrata across development
+pcFC <- function(res,ps,pLev){
+  ps = ps[!is.na(ps$psName),]
+  resM = melt(res,id.vars = "Gene")
+  resM = resM[!is.na(resM$value),]
+  resM = merge(ps,resM,by="Gene")
+  resM$psName = factor(resM$psName,levels = pLev)
+  p <- ggplot(resM,aes(x = variable,y=value,fill = psName))+
+    geom_boxplot(outlier.shape=NA,notch = TRUE)+
+    main_theme+
+    geom_hline(yintercept = 0,color="black")+
+    ylab("logFC (worker/queen)")+
+    xlab("stage")
+  return(p)
+}
+
+#Compare differential expression between species with fisher test
+compDEfish <- function(antDE,beeDE){
+  antDEo = merge(antDE,AB11,by.x="Gene",by.y="gene_Mphar")
+  beeDEo = merge(beeDE,AB11,by.x="Gene",by.y="gene_Amel")
+  results = list()
+  for (col in colnames(antDEo[c(2:ncol(antDE))])){
+    d1 = antDEo[,c(col,"OGGend")]
+    d2 = beeDEo[,c(col,"OGGend")]
+    d = merge(d1,d2,by='OGGend')
+    colnames(d)[c(2,3)] = c("ant","bee")
+    aDE = d$OGG[d$ant!="nonDE"]
+    bDE = d$OGG[d$bee!="nonDE"]
+    shared = sum(aDE %in% bDE)
+    fishDE = fisher.test(rbind(c(shared,length(aDE) - shared),
+                               c(length(bDE) - shared,nrow(d) - length(aDE) - length(bDE) + shared)),alternative = "greater")
+    dShared = d[d$OGG %in% aDE[aDE %in% bDE],]
+    aQ = dShared$OGG[dShared$ant=="queen"]
+    bQ = dShared$OGG[dShared$bee=="queen"]
+    bothQ = sum(aQ %in% bQ)
+    fishCaste = fisher.test(rbind(c(bothQ,length(aQ) - bothQ),
+                                  c(length(bQ) - bothQ,nrow(dShared) - length(aQ) - length(bQ) + bothQ)),alternative="greater")
+    
+    results[[col]] = c(shared,length(aDE),length(bDE),fishDE$estimate,fishDE$p.value,
+                       bothQ,length(aQ),length(bQ),fishCaste$estimate,fishCaste$p.value)
+  }
+  
+  res = ldply(results)
+  colnames(res) = c("Stage/tissue","shared","antN","beeN",
+                    "Fisher_odds","FisherP",
+                    "sharedQ","antQ","beeQ","Fisher_odds","FisherP")
+  
+  res[,c(5,6,10,11)] = apply(res[,c(5,6,10,11)],2,function(x) signif(x,3))
+  return(res)
+}
+
+#Get mean expression for each stage/caste combination
+meanExpr <- function(d,f,factorFun){
+  d = log(d^2+1)
+  d = d[rowSums(d) > 0,]
+  d = quantile_normalisation(d)
+  f = editFactor(f)
+  fQ = droplevels(f[f$caste=="queen",])
+  fW = droplevels(f[f$caste=="worker",])
+  fAll = list(fQ,fW)
+  dAll = list(d[,colnames(d) %in% fQ$sample],d[,colnames(d) %in% fW$sample])
+  expr = lapply(c(1,2),function(i){ lapply(levels(f$tissue_stage),function(x){
+    rowSums(dAll[[i]][,colnames(dAll[[i]]) %in% fAll[[i]]$sample[fAll[[i]]$tissue_stage==x]])/sum(fAll[[i]]$tissue_stage==x)
+  })})
+  return(expr)
+}
+
+#Normalize quantiles for expression data
+#From https://davetang.org/muse/2014/07/07/quantile-normalisation-in-r/
+quantile_normalisation <- function(df){
+  df_rank <- apply(df,2,rank,ties.method="min")
+  df_sorted <- data.frame(apply(df, 2, sort))
+  df_mean <- apply(df_sorted, 1, mean)
+  
+  index_to_mean <- function(my_index, my_mean){
+    return(my_mean[my_index])
+  }
+  
+  df_final <- apply(df_rank, 2, index_to_mean, my_mean=df_mean)
+  rownames(df_final) <- rownames(df)
+  return(df_final)
+}
+
+#Get pearson correlation of expression for a given sample
+orthoExprCor <- function(exprA,exprB,N){
+  dA = data.frame(Gene = names(exprA),exprAnt=exprA)
+  dB = data.frame(Gene = names(exprB),exprBee = exprB)
+  dA = merge(AB11,dA,by.x="gene_Mphar",by.y="Gene")
+  dA = merge(dA,dB,by.x="gene_Amel",by.y="Gene")
+  dA_order = dA[order(sqrt(dA$exprAnt*dA$exprBee),decreasing=TRUE),]
+  dA_test = dA_order[1:N,]
+  test = cor.test(dA_test$exprAnt,dA_test$exprBee)
+  return(c(test$estimate,c1=test$conf.int[1],c2=test$conf.int[2]))
+}
+
+#Make plot of pearson correlation of expression for two lists of expression
+pCorExpr <- function(mExprA,mExprB,N){
+  results <- ldply(mapply(function(X,Y){
+    ldply(lapply(seq(1,length(mExprA[[1]])),function(e){
+        orthoExprCor(X[[e]],Y[[e]],N)
+    }))
+  },X=mExprA,Y=mExprB,SIMPLIFY = FALSE))
+  results2 = ldply(lapply(seq(1,length(mExprA[[1]])),function(e){
+    orthoExprCor(mExprA[[1]][[e]],mExprB[[2]][[e]],N)
+  }))
+  results3 = ldply(lapply(seq(1,length(mExprA[[1]])),function(e){
+    orthoExprCor(mExprA[[2]][[e]],mExprB[[1]][[e]],N)
+  }))
+  results = do.call(rbind,list(results,results2,results3))
+  results$caste = factor(rep(c("AQ-BQ","AW-BW","AQ-BW","AW-BQ"),each=length(mExprA[[1]])),levels=c("AQ-BQ","AW-BW","AQ-BW","AW-BQ"))
+  results$stage = factor(rep(names(mExprA[[1]]),4),levels=names(mExprA[[1]]))
+  p <- ggplot(results,aes(x = stage,y=cor,fill=caste))+
+    geom_bar(stat="identity",position=position_dodge())+
+    geom_errorbar(aes(ymin=c1,ymax=c2),width=0.3,position = position_dodge(width=0.9))+
+    main_theme+
+    ylab("pearson correlation")+
+    ggtitle(paste("top",N,"genes",sep=" "))+
+    theme(axis.text = element_text(angle=-25,hjust=0.1))
+  return(p)
+}
+
 
 
 ############
@@ -590,16 +849,114 @@ antT <- read.table("~/GitHub/devnetwork/data/ants.tpm.txt",header=TRUE)
 beeT <- modifyDF(beeT)
 antT <- modifyDF(antT)
 
-ogg2 <- read.csv("~/GitHub/devnetwork/data/HymOGG_hym.csv",sep=" ")
-t = table(ogg2$OGG)
+
+AmeanExpr <- meanExpr(antT,factorA,editFactor)
+BmeanExpr <- meanExpr(beeT,factorB,editFactor)
+names(AmeanExpr[[1]])=names(AmeanExpr[[2]])=names(BmeanExpr[[1]])=names(BmeanExpr[[2]]) = c("L2","L3","L4","L5","pupa","adult_head","adult_mesosoma","adult_abdomen")
+#names(AmeanExpr[[1]])=names(AmeanExpr[[2]])=names(BmeanExpr[[1]])=names(BmeanExpr[[2]]) = c("larva","pupa","adult_head","adult_mesosoma","adult_abdomen")
+
+corPlots <- lapply(c(1000,2000,3000,4000,5000,6000,6538),function(N){
+  pCorExpr(AmeanExpr,BmeanExpr,N)
+})
+
+
+
+png("~/GitHub/devnetwork/figures/exprCor_stage2.png",height=3000,width=4000,res=300)
+do.call("grid.arrange",c(lapply(corPlots[c(1:6)],function(x) x+theme(legend.position="none")),nrow=2))
+dev.off()
+png("~/GitHub/devnetwork/figures/exprCor_stage.png",height=2000,width=2000,res=300)
+corPlots[[7]]
+dev.off()
+
+
+
+
+Atax = "cellular organisms; Eukaryota; Opisthokonta; Metazoa; Eumetazoa; Bilateria; Protostomia; Ecdysozoa; Panarthropoda; Arthropoda; Mandibulata; Pancrustacea; Hexapoda; Insecta; Dicondylia; Pterygota; Neoptera; Holometabola; Hymenoptera; Apocrita; Aculeata; Formicoidea; Formicidae; Myrmicinae; Solenopsidini; Monomorium"
+Atax = strsplit(Atax,"; ")[[1]]
+Aps <- mergeRes2(307658,"Mphar",Atax,"novel","Mphar_307658_blastAll_ps")
+ant_name = c("Solenopsidini","Formicidae","Myrmicinae")
+old = c("Bilateria","Eumetazoa","Protostomia","Ecdysozoa","Metazoa")
+insect_arthropod = c("Holometabola","Arthropoda","Hexapoda","Pancrustacea","Mandibulata","Pterygota","Neoptera")
+aculeata = c("Aculeata","Apocrita")
+bee_name = c("Apoidea", "Apidae", "Apinae","Apini")
+Aps$psName[Aps$psName %in% ant_name] = "ant"
+Aps$psName[Aps$psName %in% old] = "old"
+Aps$psName[Aps$psName %in% insect_arthropod] = "insect_arthropod"
+Aps$psName[Aps$psName %in% aculeata] = "aculeata"
+Aps$psName[Aps$psName=="Monomorium"] = "novel"
+
+
+Btax = "cellular organisms; Eukaryota; Opisthokonta; Metazoa; Eumetazoa; Bilateria; Protostomia; Ecdysozoa; Panarthropoda; Arthropoda; Mandibulata; Pancrustacea; Hexapoda; Insecta; Dicondylia; Pterygota; Neoptera; Holometabola; Hymenoptera; Apocrita; Aculeata; Apoidea; Apidae; Apinae; Apini; Apis"
+Btax = strsplit(Btax,"; ")[[1]]
+Bps <- mergeRes2(7460,"Amel",Btax,"novel","Amel_7460_blastAll_ps")
+Bps$psName[Bps$psName %in% old] = "old"
+Bps$psName[Bps$psName %in% insect_arthropod] = "insect_arthropod"
+Bps$psName[Bps$psName %in% aculeata] = "aculeata"
+Bps$psName[Bps$psName %in% bee_name] = "bee"
+Bps$psName[Bps$psName == "Apis"] = "novel"
+
+
+AllPS = merge(Aps[!is.na(Aps$OGGacu),],Bps[!is.na(Bps$OGGacu),],by = "OGGacu")
+AllPS$psMin = apply(AllPS[,c("ps.x","ps.y")],1,min)
+AllPS$psName = "old"
+AllPS$psName[AllPS$psMin > 8] = "insect"
+AllPS$psName[AllPS$psMin > 18] = "hymenoptera"
+AllPS$psName[AllPS$psMin > 20] = "aculeata"
+
+Dtax = "cellular organisms; Eukaryota; Opisthokonta; Metazoa; Eumetazoa; Bilateria; Protostomia; Ecdysozoa; Panarthropoda; Arthropoda; Mandibulata; Pancrustacea; Hexapoda; Insecta; Dicondylia; Pterygota; Neoptera; Holometabola; Diptera; Brachycera; Muscomorpha; Eremoneura; Cyclorrhapha; Schizophora; Acalyptratae; Ephydroidea; Drosophilidae; Drosophilinae; Drosophilini; Drosophila; Sophophora; melanogaster group; melanogaster subgroup"
+Dtax = strsplit(Dtax,"; ")[[1]]
+Dps <- mergeRes(7227,"Dmel",Btax,"Drosophila melanogaster")
+
+
+antT = antT[rowSums(antT) > 0,]
+beeT = beeT[rowSums(beeT) > 0,]
+
+orthologs <- merge(Aps[!is.na(Aps$OGGacu),c("Gene","OGGacu")],Bps[!is.na(Aps$OGGacu),c("Gene","OGGacu")],by="OGGacu")
+colnames(orthologs) = c("OGGacu","gene_Mphar","gene_Amel")
+#Get ortholog weighting values for use 
+t = table(droplevels(orthologs$OGGacu))
+weight = data.frame(OGGacu = names(t), mag = 1/as.numeric(as.character(t)))
+orthologs = merge(orthologs,weight,by="OGGacu")
+AmelIndex = data.frame(Gene = rownames(beeT),index = seq(0,nrow(beeT) - 1))
+MpharIndex = data.frame(Gene = rownames(antT),index = seq(0,nrow(antT) - 1))
+orthologs = merge(orthologs,MpharIndex,by.x="gene_Mphar",by.y="Gene")
+orthologs = merge(orthologs,AmelIndex,by.x="gene_Amel",by.y="Gene")
+OGGmap = orthologs[,c(5,6,4)]
+write.table(OGGmap,file="~/Data/devnetwork/OGGmap.txt",sep="\t",row.names = FALSE,col.names = FALSE)
+
+
 t = t[t==1]
-oggFilt = ogg2[ogg2$OGG %in% names(t),] #get 1-1 orthologs
-b = table(oggFilt$gene_Amel)
-b = b[b==1]
-oggFilt = oggFilt[oggFilt$gene_Amel %in% names(b),]
-a = table(oggFilt$gene_Mphar)
-a = a[a==1]
-ogg11 = oggFilt[oggFilt$gene_Mphar %in% names(a),]
+AB11 = orthologs[orthologs$OGGend %in% names(t),]
+t = table(AB11$gene_Mphar)
+t = t[t==1]
+AB11 = AB11[AB11$gene_Mphar %in% names(t),]
+t = table(AB11$gene_Amel)
+t = t[t==1]
+AB11 = AB11[AB11$gene_Amel %in% names(t),]
+
+AB111 = merge(AB11,Dps[,c(1,4)],by="OGGend")
+t = table(AB111$Gene)
+t = t[t==1]
+AB111 = AB111[AB111$Gene %in% names(t),]
+t = table(AB111$OGGend)
+t = t[t==1]
+AB111 = AB111[AB111$OGGend %in% names(t),]
+
+
+
+#Get orthologs
+ogg11 <- read.csv("~/GitHub/devnetwork/data/HymOGG_hym.csv",sep = " ")
+
+t = table(ogg11$OGG)
+t = t[t==1]
+t2 = table(ogg11$gene_Mphar)
+t2 = t2[t2==1]
+t3 = table(ogg11$gene_Amel)
+t3 = t3[t3==1]
+
+ogg11 = ogg11[ogg11$OGG %in% names(t) & ogg11$gene_Mphar %in% names(t2) &
+                 ogg11$gene_Amel %in% names(t3),]
+
 
 #get orthologs with drosophila
 ogg111 <- read.csv("~/GitHub/devnetwork/data/ThreeWayOGGMap.csv")
@@ -619,43 +976,14 @@ t4 = t4[t4==1]
 ogg3f = ogg111[ogg111$OGG %in% names(t) & ogg111$gene_Mphar %in% names(t2) &
                  ogg111$gene_Amel %in% names(t3) & ogg111$V2 %in% names(t4),]
 
-d = read.table("~/GitHub/devnetwork/src/phylostratigraphy/Mphar_307658_ps")
-dnds=read.table("~/Dropbox/monomorium nurses/data/dnds.txt",head=F)   #dim 22476
-
-colnames(dnds)=c("gene_id","dnds")
-ann=read.table("~/Dropbox/monomorium nurses/data/monomorium.annotation.txt",sep="\t",head=T,quote="\"",stringsAsFactors = FALSE)   # note, problem caused by "'" in file
-
-#add gene_id column to annotation based on the same order in dnds file
-ann$gene_id=dnds$gene_id
-
-ext <- read.csv("~/Downloads/msx123_Supp (1)/MpharAnn.csv") #load in MBE results
-ePS <- ext[,c("Gene","PS2")]
-
-Aps <- read.table("~/GitHub/devnetwork/data/Mphar_307658_ps")
-Bps <- read.table("~/GitHub/devnetwork/data/Amel_7460_ps")
-Amap <- read.table("~/GitHub/devnetwork/data/307658_Mphar_blastRes.tab")
-Bmap <- read.table("~/GitHub/devnetwork/data/7460_Amel_blastRes.tab")
-Amets <- read.table("~/GitHub/devnetwork/data/Mphar_307658_METs")
-Bmets <- read.table("~/GitHub/devnetwork/data/Amel_7460_METs")
-
-mergeMap <- function(ps,map,mets){
-  ps = ps[!duplicated(ps),]
-  psM <- merge(ps,mets,by.x="V1",by.y="V2")
-  colnames(psM) = c("OGG","ps","ODB_gene")
-  psf <- merge(psM,map,by.x = "ODB_gene",by.y="V3",all.y=TRUE)
-}
-
-
-
-
 
 ########
 ##Identify differentially expressed genes
 ########
-beeTests = speciesDEtests(bee,factorB,editFactor)
-beeTests_oneLarv = speciesDEtests(bee,factorB,editFactor_oneLarv)
-antTests = speciesDEtests(ant,factorA,editFactor)
-antTests_oneLarv = speciesDEtests(ant,factorA,editFactor_oneLarv)
+beeTests = speciesCaste(bee,factorB,editFactor)
+beeTests_oneLarv = speciesCaste(bee,factorB,editFactor_oneLarv)
+antTests = speciesCaste(ant,factorA,editFactor)
+antTests_oneLarv = speciesCaste(ant,factorA,editFactor_oneLarv)
 ant_sexDE = sexDE(ant,factorA) #Comparing mated queens to males
 bee_sexDE = sexDE(bee,factorB)
 ant_VM = ovaryDE(ant,factorA) #Comparing mated to virgin queens
@@ -663,91 +991,65 @@ bee_VM = ovaryDE(bee,factorB)
 beeSocial <- speciesSocial(bee,factorB) #comparing nurses to foragers
 antSocial <- speciesSocial(ant,factorA)
 
-save(beeTests,beeTests_oneLarv,antTests,antTests_oneLarv,ant_sexDE,bee_sexDE,ant_VM,bee_VM,beeSocial,antSocial,file = "~/GitHub/devnetwork/data/DEtests.RData")
-
+save(beeTests,beeTests_oneLarv,antRes,beeRes,antRes_allStage,beeRes_allStage,antSocRes,beeSocRes,antTests,antTests_oneLarv,ant_sexDE,bee_sexDE,ant_VM,bee_VM,beeSocial,antSocial,file = "~/GitHub/devnetwork/data/DEtests.RData")
 
 #Extract logFC, FDR from DE results
-antRes = collapseLogFC(antTests_oneLarv[[2]])
-beeRes = collapseLogFC(beeTests_oneLarv[[2]])
-antRes_allstage = collapseLogFC(antTests[[2]])
-beeRes_allstage = collapseLogFC(beeTests[[2]])
+names(antTests_oneLarv) = names(beeTests_oneLarv) = c("larva","pupa","head","thorax","abdomen")
+antRes <- parseDE(antTests_oneLarv,"worker","queen")
+beeRes <- parseDE(beeTests_oneLarv,"worker","queen")
+antRes_allstage <- parseDE(antTests,"worker","queen")
+beeRes_allstage <- parseDE(beeTests,"worker","queen")
 
-#Make dataframes for differential expression at each stage
-antDE_allstage = DE_direction(antRes_allstage)
-beeDE_allstage = DE_direction(beeRes_allstage)
-antDE = DE_direction(antRes)
-beeDE = DE_direction(beeRes)
+#Get social results
+antSocRes <- parseDE(antSocial,"forager","nurse")
+beeSocRes <- parseDE(beeSocial,"forager","nurse")
 
-colnames(antDE) = c("Gene","larva","pupa","head","thorax","abdomen")
-antDE = merge(antDE,ePS,by="Gene")
-aM <- melt(antDE,id.vars=c("Gene","PS2"))
+ApLev = c("old","insect_arthropod","Hymenoptera","aculeata","ant","novel")
+png("~/GitHub/devnetwork/figures/psFC_ant.png",height=2000,width=2000,res=300)
+pcFC(antRes[[1]],Aps,ApLev)+ggtitle("ant")+ylim(-6,6)+theme(legend.position = "top",legend.title = element_blank())
+dev.off()
 
-ggplot(aM[aM$variable=="abdomen",],aes(x = value,fill=PS2))+
-  geom_bar(stat="count")
+png("~/GitHub/devnetwork/figures/psFC_ant_behav.png",height=2000,width=2000,res=300)
+pcFC(antSocRes[[1]],Aps,ApLev)+ggtitle("ant behavior")+ylab("logFC (forager/nurse)")+theme(legend.position = "top",legend.title = element_blank())
+dev.off()
 
-#Compare differential expression between species
-antDEo = merge(antDE_allstage,ogg11,by.x="Gene",by.y="gene_Mphar")
-beeDEo = merge(beeDE_allstage,ogg11,by.x="Gene",by.y="gene_Amel")
-results = list()
-for (col in colnames(antDEo[c(2:9)])){
-  d1 = antDEo[,c(col,"OGG")]
-  d2 = beeDEo[,c(col,"OGG")]
-  d = merge(d1,d2,by='OGG')
-  colnames(d)[c(2,3)] = c("ant","bee")
-  aDE = d$OGG[d$ant!="nonDE"]
-  bDE = d$OGG[d$bee!="nonDE"]
-  shared = sum(aDE %in% bDE)
-  fishDE = fisher.test(rbind(c(shared,length(aDE) - shared),
-                       c(length(bDE) - shared,nrow(d) - length(aDE) - length(bDE) + shared)),alternative = "greater")
-  dShared = d[d$OGG %in% aDE[aDE %in% bDE],]
-  aQ = dShared$OGG[dShared$ant=="queen"]
-  bQ = dShared$OGG[dShared$bee=="queen"]
-  bothQ = sum(aQ %in% bQ)
-  fishCaste = fisher.test(rbind(c(bothQ,length(aQ) - bothQ),
-                                c(length(bQ) - bothQ,nrow(dShared) - length(aQ) - length(bQ) + bothQ)),alternative="greater")
-  
-  results[[col]] = c(shared,length(aDE),length(bDE),fishDE$estimate,fishDE$p.value,
-                     bothQ,length(aQ),length(bQ),fishCaste$estimate,fishCaste$p.value)
-}
+png("~/GitHub/devnetwork/figures/psRep_ant_abd.png",height=4000,width=2000,res=300)
+do.call(
+  grid.arrange,lapply(psMosaic(antDE,Aps,ApLev,"8_gaster"),function(x) x +ggtitle("ant gaster")+theme(legend.position = "top")))
+dev.off()
 
-res = ldply(results)
-colnames(res) = c("Stage/tissue","shared","antN","beeN",
-                  "Fisher_odds","FisherP",
-                  "sharedQ","antQ","beeQ","Fisher_odds","FisherP")
+BpLev = c("old","insect_arthropod","Hymenoptera","aculeata","bee","novel")
+png("~/GitHub/devnetwork/figures/psFC_bee.png",height=2000,width=2000,res=300)
+pcFC(beeRes[[1]],Bps,BpLev)+ggtitle("bee")+ylim(-6,6)+theme(legend.position = "top",legend.title=element_blank())
+dev.off()
 
-res[,c(5,6,10,11)] = apply(res[,c(5,6,10,11)],2,function(x) signif(x,3))
-res[,1] = c("L2","L3","L4","L5","pupa","adult_head","adult_mesosoma","adult_abdomen")
+png("~/GitHub/devnetwork/figures/psFC_bee_behav.png",height=2000,width=2000,res=300)
+pcFC(beeSocRes[[1]],Bps,BpLev)+ggtitle("bee behavior")+ylab("logFC (for/nurse)")+theme(legend.position = "top",legend.title=element_blank())
+dev.off()
+
+png("~/GitHub/devnetwork/figures/psRep_bee_abd.png",height=4000,width=2000,res=300)
+do.call(
+  grid.arrange,lapply(psMosaic(beeDE,Bps,BpLev,"8_gaster"),function(x) x +ggtitle("bee gaster")+theme(legend.position = "top")))
+dev.off()
+
+res = compDEfish(antRes[[2]],beeRes[[2]])
+res[,1] = c("larva","pupa","adult_head","adult_thorax","adult_abdomen")
 
 png("~/GitHub/devnetwork/figures/DEtable.png",height=2000,width=4000,res=300)
 grid.table(res)
 dev.off()
 
-#Get genes with interaction effects
-intAnt = rownames(antInt)[antInt$FDR < 0.05]
-intBee = rownames(beeInt)[beeInt$FDR < 0.05]
-ogg11$intAnt = ogg11$intBee = 0
-ogg11$intAnt[ogg11$gene_Mphar %in% intAnt] = 1
-ogg11$intBee[ogg11$gene_Amel %in% intBee] = 1
-vennDiagram(ogg11[,c("intAnt","intBee")])
+res = compDEfish(antSocRes[[2]],beeSocRes[[2]])
+res[,1] = c("adult_head","adult_thorax","adult_abdomen")
 
-#Extract abdomen genes for later use
-ogg11$abdAnt = ogg11$abdBee = "nonDE"
-ogg11$abdAnt[ogg11$gene_Mphar %in% antDE$Gene[antDE$`8_gaster`=="worker"]]="worker"
-ogg11$abdAnt[ogg11$gene_Mphar %in% antDE$Gene[antDE$`8_gaster`=="queen"]]="queen"
-ogg11$abdBee[ogg11$gene_Amel %in% beeDE$Gene[beeDE$`8_gaster`=="worker"]]="worker"
-ogg11$abdBee[ogg11$gene_Amel %in% beeDE$Gene[beeDE$`8_gaster`=="queen"]]="queen"
+png("~/GitHub/devnetwork/figures/DEtable_behav.png",height=2000,width=4000,res=300)
+grid.table(res)
+dev.off()
 
-DEoverlap(antDE,"queen","ant",FALSE)
-DEoverlap(antDE,"worker","ant",FALSE)
-DEoverlap(antDE_allstage[,c(1:5)],"queen","ant",TRUE)
-DEoverlap(antDE_allstage[,c(1:5)],"worker","ant",TRUE)
-
-DEoverlap(beeDE,"queen","bee",FALSE)
-DEoverlap(beeDE,"worker","bee",FALSE)
-DEoverlap(beeDE_allstage[,c(1:5)],"queen","bee",TRUE)
-DEoverlap(beeDE_allstage[,c(1:5)],"worker","bee",TRUE)
-
-
+DEoverlap_soc(antSocRes[[2]],"forager","ant")
+DEoverlap_soc(antSocRes[[2]],"nurse","ant")
+DEoverlap_soc(beeSocRes[[2]],"forager","bee")
+DEoverlap_soc(beeSocRes[[2]],"nurse","bee")
 #Figure 1a,b: Caste-bias changes across development
 png("~/GitHub/devnetwork/figures/AntDEnums.png",width=2000,height=2000,res=300)
 DEheatmap(antDE,"ant")
@@ -757,19 +1059,27 @@ png("~/GitHub/devnetwork/figures/BeeDEnums.png",width=2000,height=2000,res=300)
 DEheatmap(beeDE,"bee")
 dev.off()
 
+png("~/GitHub/devnetwork/figures/AntDEnums_behav.png",width=2000,height=2000,res=300)
+DEheatmap(antSocRes[[2]],"ant")
+dev.off()
+
+png("~/GitHub/devnetwork/figures/BeeDEnums_behav.png",width=2000,height=2000,res=300)
+DEheatmap(beeSocRes[[2]],"bee")
+dev.off()
+
 #Compare DE definition at each stage
-aM = melt(antDE,id.vars = "Gene")
+aM = melt(antRes[[2]],id.vars = "Gene")
 aD = ddply(aM,~variable,summarize,
            NDE = sum(value=="nonDE"),
            DE = sum(value!="nonDE"))
-bM = melt(beeDE,id.vars = "Gene")
+bM = melt(beeRes[[2]],id.vars = "Gene")
 bD = ddply(bM,~variable,summarize,
            NDE = sum(value=="nonDE"),
            DE = sum(value!="nonDE"))
 colnames(bM)[3] = "value_apis"
-aM = merge(aM, ogg11,by.x="Gene",by.y="gene_Mphar")
-bM = merge(bM, ogg11,by.x="Gene",by.y="gene_Amel")
-allM = merge(aM,bM,by=c("OGG","variable"))
+aM = merge(aM, AB11,by.x="Gene",by.y="gene_Mphar")
+bM = merge(bM, AB11,by.x="Gene",by.y="gene_Amel")
+allM = merge(aM,bM,by=c("OGGend","variable"))
 
 allD = ddply(allM,~variable,summarize,
              NDE_Mphar = sum(value=="nonDE"),
@@ -786,7 +1096,7 @@ allD$NDE_Mphar = aD$NDE
 allD$NDE_Apis = bD$NDE
 
 allD = allD[,-c(3,5)]
-allD[,1] = c("larva","pupa","adult_head","adult_mesosoma","adult_abdomen")
+allD[,1] = c("larva","pupa","adult_head","adult_thorax","adult_abdomen")
 colnames(allD)[1] = "Stage"
 allDm = melt(allD,id.vars = "Stage")
 allDm$species = "Mphar"
@@ -798,19 +1108,20 @@ allDm$variable = gsub("_Mphar","",allDm$variable)
 allDm$variable = gsub("_Apis","",allDm$variable)
 allDm = droplevels(allDm)
 allDm$variable = factor(allDm$variable,rev(c("DEboth","LS_OGG","LS_noOGG","NDE")))
-allDm$Stage = factor(allDm$Stage,levels = c("larva","pupa","adult_head","adult_mesosoma","adult_abdomen"))
+allDm$Stage = factor(allDm$Stage,levels = c("larva","pupa","adult_head","adult_thorax","adult_abdomen"))
 
 png("~/GitHub/devnetwork/figures/AntDE_shared.png",height=2000,width=2000,res=300)
 ggplot(allDm[allDm$variable!="NDE" & allDm$species=="Mphar",],
        aes(x = Stage, y = value, fill = variable))+
   geom_bar(stat="identity")+
   main_theme+
+  coord_flip()+
   ylab("number of genes")+
   ggtitle("ant")+
   theme(axis.text.x = element_text(angle=-25,hjust=0.1),
-        legend.position = c(0.2,0.8),
+        legend.position = c(0.7,0.2),
         legend.title = element_blank(),
-        plot.margin = margin(1.75,1.75,1.75,1.75,"cm"))
+        plot.margin = margin(2,2,2,2,"cm"))
 dev.off()
 
 png("~/GitHub/devnetwork/figures/BeeDE_shared.png",height=2000,width=2000,res=300)
@@ -818,14 +1129,143 @@ ggplot(allDm[allDm$variable!="NDE" & allDm$species=="Amel",],
        aes(x = Stage, y = value, fill = variable))+
   geom_bar(stat="identity")+
   main_theme+
+  coord_flip()+
   ylab("number of genes")+
   ggtitle("bee")+
   theme(axis.text.x = element_text(angle=-25,hjust=0.1),
-        legend.position = c(0.2,0.8),
+        legend.position = c(0.7,0.2),
         legend.title = element_blank(),
-        plot.margin = margin(1.75,1.75,1.75,1.75,"cm"))
+        plot.margin = margin(2,2,2,2,"cm"))
 dev.off()
 
+png("~/GitHub/devnetwork/figures/AntDE_shared_prop.png",height=2000,width=2000,res=300)
+ggplot(allDm[allDm$variable!="NDE" & allDm$species=="Mphar",],
+       aes(x = Stage, y = value, fill = variable))+
+  geom_bar(stat="identity",position="fill")+
+  main_theme+
+  coord_flip()+
+  ylab("proportion of genes")+
+  ggtitle("ant")+
+  theme(axis.text.x = element_text(angle=-25,hjust=0.1),
+        legend.position = c(0.7,0.2),
+        legend.title = element_blank(),
+        plot.margin = margin(2,2,2,2,"cm"))
+dev.off()
+
+png("~/GitHub/devnetwork/figures/BeeDE_shared_prop.png",height=2000,width=2000,res=300)
+ggplot(allDm[allDm$variable!="NDE" & allDm$species=="Amel",],
+       aes(x = Stage, y = value, fill = variable))+
+  geom_bar(stat="identity",position="fill")+
+  main_theme+
+  coord_flip()+
+  ylab("proportion of genes")+
+  ggtitle("bee")+
+  theme(axis.text.x = element_text(angle=-25,hjust=0.1),
+        legend.position = c(0.7,0.2),
+        legend.title = element_blank(),
+        plot.margin = margin(2,2,2,2,"cm"))
+dev.off()
+
+##Same as above for social
+aM = melt(antSocRes[[2]],id.vars = "Gene")
+aD = ddply(aM,~variable,summarize,
+           NDE = sum(value=="nonDE"),
+           DE = sum(value!="nonDE"))
+bM = melt(beeSocRes[[2]],id.vars = "Gene")
+bD = ddply(bM,~variable,summarize,
+           NDE = sum(value=="nonDE"),
+           DE = sum(value!="nonDE"))
+colnames(bM)[3] = "value_apis"
+aM = merge(aM, AB11,by.x="Gene",by.y="gene_Mphar")
+bM = merge(bM, AB11,by.x="Gene",by.y="gene_Amel")
+allM = merge(aM,bM,by=c("OGGend","variable"))
+
+allD = ddply(allM,~variable,summarize,
+             NDE_Mphar = sum(value=="nonDE"),
+             DE_Mphar = sum(value!="nonDE"),
+             NDE_Apis = sum(value_apis=="nonDE"),
+             DE_Apis = sum(value_apis!="nonDE"),
+             DEboth = sum(value_apis!="nonDE" & value != "nonDE"))
+
+allD$LS_OGG_Mphar = allD$DE_Mphar - allD$DEboth
+allD$LS_OGG_Apis = allD$DE_Apis - allD$DEboth
+allD$LS_noOGG_Mphar = aD$DE - allD$DE_Mphar
+allD$LS_noOGG_Apis = bD$DE - allD$DE_Apis
+allD$NDE_Mphar = aD$NDE
+allD$NDE_Apis = bD$NDE
+
+allD = allD[,-c(3,5)]
+allD[,1] = c("adult_head","adult_thorax","adult_abdomen")
+colnames(allD)[1] = "Stage"
+allDm = melt(allD,id.vars = "Stage")
+allDm$species = "Mphar"
+allDm$species[grepl("Apis",allDm$variable)] ="Amel"
+sub = allDm[allDm$variable=="DEboth",]
+sub$species = "Amel"
+allDm = rbind(allDm,sub)
+allDm$variable = gsub("_Mphar","",allDm$variable)
+allDm$variable = gsub("_Apis","",allDm$variable)
+allDm = droplevels(allDm)
+allDm$variable = factor(allDm$variable,rev(c("DEboth","LS_OGG","LS_noOGG","NDE")))
+allDm$Stage = factor(allDm$Stage,levels = c("larva","pupa","adult_head","adult_thorax","adult_abdomen"))
+
+png("~/GitHub/devnetwork/figures/AntDE_shared_soc.png",height=2000,width=2000,res=300)
+ggplot(allDm[allDm$variable!="NDE" & allDm$species=="Mphar",],
+       aes(x = Stage, y = value, fill = variable))+
+  geom_bar(stat="identity")+
+  main_theme+
+  coord_flip()+
+  ylab("number of genes")+
+  ggtitle("ant")+
+  theme(axis.text.x = element_text(angle=-25,hjust=0.1),
+        legend.position = c(0.7,0.2),
+        legend.title = element_blank(),
+        plot.margin = margin(2,2,2,2,"cm"))
+dev.off()
+
+png("~/GitHub/devnetwork/figures/BeeDE_shared_soc.png",height=2000,width=2000,res=300)
+ggplot(allDm[allDm$variable!="NDE" & allDm$species=="Amel",],
+       aes(x = Stage, y = value, fill = variable))+
+  geom_bar(stat="identity")+
+  main_theme+
+  coord_flip()+
+  ylab("number of genes")+
+  ggtitle("bee")+
+  theme(axis.text.x = element_text(angle=-25,hjust=0.1),
+        legend.position = c(0.7,0.2),
+        legend.title = element_blank(),
+        plot.margin = margin(2,2,2,2,"cm"))
+dev.off()
+
+png("~/GitHub/devnetwork/figures/AntDE_shared_prop_soc.png",height=2000,width=2000,res=300)
+ggplot(allDm[allDm$variable!="NDE" & allDm$species=="Mphar",],
+       aes(x = Stage, y = value, fill = variable))+
+  geom_bar(stat="identity",position="fill")+
+  main_theme+
+  coord_flip()+
+  ylab("proportion of genes")+
+  ggtitle("ant")+
+  theme(axis.text.x = element_text(angle=-25,hjust=0.1),
+        legend.position = c(0.7,0.2),
+        legend.title = element_blank(),
+        plot.margin = margin(2,2,2,2,"cm"))
+dev.off()
+
+png("~/GitHub/devnetwork/figures/BeeDE_shared_prop_soc.png",height=2000,width=2000,res=300)
+ggplot(allDm[allDm$variable!="NDE" & allDm$species=="Amel",],
+       aes(x = Stage, y = value, fill = variable))+
+  geom_bar(stat="identity",position="fill")+
+  main_theme+
+  coord_flip()+
+  ylab("proportion of genes")+
+  ggtitle("bee")+
+  theme(axis.text.x = element_text(angle=-25,hjust=0.1),
+        legend.position = c(0.7,0.2),
+        legend.title = element_blank(),
+        plot.margin = margin(2,2,2,2,"cm"))
+dev.off()
+
+#Identify genes with conserved caste bias in abdomens
 mat = matrix(ncol=3)
 colnames(mat) = c("Stage","variable","species")
 for (i in 1:nrow(allDm)){
@@ -851,15 +1291,15 @@ ggplot(data=mat[mat$variable!="NDE",])+
   scale_x_productlist(labels = levels(mat$Stage),breaks = c(0,0.08,0.2,0.4,0.7))
 dev.off()
 
-#Association between interaction effect genes
-x <- vennCounts(ogg11[,c("intBee","intAnt")])
+allMp <- merge(allM,Aps,by.x="gene_Mphar",by.y="Gene")
 
-#Figure 1d
-png("~/GitHub/devnetwork/figures/InteractionOverlap.png")
-vennDiagram(x,names = c("Apis","Mphar"))
-dev.off()
+allD = ddply(allMp,~variable+psName,summarize,
+             NDE_Mphar = sum(value=="nonDE"),
+             DE_Mphar = sum(value!="nonDE"),
+             NDE_Apis = sum(value_apis=="nonDE"),
+             DE_Apis = sum(value_apis!="nonDE"),
+             DEboth = sum(value_apis!="nonDE" & value != "nonDE"))
 
-chisq.test(rbind(c(868,1493),c(1026,3338)))
 
 #Compare logFC across development between bees and ants
 d = lfcCor(antRes_allstage[[1]],beeRes_allstage[[1]])
@@ -868,20 +1308,43 @@ d[[1]]$Stage=d[[2]]$Stage = c("L2","L3","L4","L5","pupa","adult_head","adult_mes
 d[[1]]$Stage = d[[2]]$Stage = factor(d[[1]]$Stage,levels=d[[1]]$Stage)
 d[[1]]$type = "signed"
 d[[2]]$type = "unsigned"
-df = rbind(d[[1]],d[[2]])
+#df = rbind(d[[1]],d[[2]])
 
 #Figure 1e- log fold change comparison between species
 png("~/GitHub/devnetwork/figures/lfc_both.png",width=2000,height=2000,res=300)
-ggplot(df,aes(x = Stage, y = cor,fill=type))+
+ggplot(d[[1]],aes(x = Stage, y = cor))+
   geom_bar(stat = "identity",position=position_dodge())+
   geom_errorbar(aes(ymin=c1,ymax=c2),width = 0.2,position=position_dodge(width=.9))+
   ylab("pearson correlation")+
   xlab("stage/tissue")+
-  scale_fill_manual(values = c("grey20","grey60"),name = "correlation type")+
   main_theme+
   theme(legend.position = c(0.3,0.85),
         axis.text.x = element_text(angle=-45,hjust=0),
-        plot.margin = margin(1.5,1.5,1.5,1.5,"cm"),
+        plot.margin = margin(1.5,2,1.5,1.5,"cm"),
+        legend.background = element_blank())
+dev.off()
+
+antRes_allstage[[3]][,c(2:9)] = -log(antRes_allstage[[3]][,c(2:9)]+1)
+beeRes_allstage[[3]][,c(2:9)] = -log(beeRes_allstage[[3]][,c(2:9)]+1)
+d = lfcCor(antRes_allstage[[3]],beeRes_allstage[[3]])
+#d[[1]]$Stage=d[[2]]$Stage = c("larva","pupa","adult_head","adult_mesosoma","adult_abdomen")
+d[[1]]$Stage=d[[2]]$Stage = c("L2","L3","L4","L5","pupa","adult_head","adult_mesosoma","adult_abdomen")
+d[[1]]$Stage = d[[2]]$Stage = factor(d[[1]]$Stage,levels=d[[1]]$Stage)
+d[[1]]$type = "signed"
+d[[2]]$type = "unsigned"
+#df = rbind(d[[1]],d[[2]])
+
+#Figure 1e- log fold change comparison between species
+png("~/GitHub/devnetwork/figures/lfc_both.png",width=2000,height=2000,res=300)
+ggplot(d[[1]],aes(x = Stage, y = cor))+
+  geom_bar(stat = "identity",position=position_dodge())+
+  geom_errorbar(aes(ymin=c1,ymax=c2),width = 0.2,position=position_dodge(width=.9))+
+  ylab("pearson correlation")+
+  xlab("stage/tissue")+
+  main_theme+
+  theme(legend.position = c(0.3,0.85),
+        axis.text.x = element_text(angle=-45,hjust=0),
+        plot.margin = margin(1.5,2,1.5,1.5,"cm"),
         legend.background = element_blank())
 dev.off()
 
@@ -926,6 +1389,9 @@ worker_q = Abd[Abd$ant_logFC < 0 & Abd$bee_logFC > 0 & Abd$DE == "bothDE",]
 q_ext = merge(queen,ext,by.x = "Gene.x",by.y="Gene")
 w_ext = merge(worker,ext,by.x = "Gene.x",by.y="Gene")
 
+
+allPS <- merge(Aps[!is.na(Aps$OGGend),],Bps[!is.na(Aps$OGGend),],by="OGGend")
+
 ######Comparing to sex-biased and virgin-mated biased genes
 
 #Three-way venn for each species
@@ -944,10 +1410,121 @@ w_ext = merge(worker,ext,by.x = "Gene.x",by.y="Gene")
 fdr = 0.05
 BeeDev <- genDevTool(fdr,factorB,bee)
 AntDev <- genDevTool(fdr,factorA,ant)
+antDE = antRes[[2]]
+beeDE = beeRes[[2]]
+beeDE$devel = antDE$devel = "nonDE"
+beeDE$devel[beeDE$Gene %in% BeeDev] = "DE"
+antDE$devel[antDE$Gene %in% AntDev] = "DE"
+antDE$devel=factor(antDE$devel,levels = c("nonDE","DE"))
+beeDE$devel=factor(beeDE$devel,levels = c("nonDE","DE"))
+aM = melt(antDE,id.vars = c("Gene","devel"))
+aM$species = "ant"
+bM = melt(beeDE,id.vars = c("Gene","devel"))
+bM$species = "bee"
 
+overlapPlot <- function(data){
+  p <- ggplot(data,aes(x = value,fill=devel))+
+    geom_bar(stat="count",position="fill")+
+    facet_wrap(~variable,nrow=1)+
+    main_theme
+  return(p)
+}
+
+png("~/GitHub/devnetwork/figures/DevDE_caste_ant.png",width=4000,height=2000,res=300)
+overlapPlot(aM)+ylab("proportion")
+dev.off()
+
+
+png("~/GitHub/devnetwork/figures/DevDE_caste_bee.png",width=4000,height=2000,res=300)
+overlapPlot(bM)+ylab("proportion")
+dev.off()
+
+
+name1 = "queen"
+name2 = "worker"
+Mall = merge(aM,AB11,by.x="Gene",by.y="gene_Mphar")
+Mall2 = merge(bM,AB11,by.x="Gene",by.y="gene_Amel")
+Mall = rbind(Mall[,-c(7)],Mall2[,-c(7)])
+Ma = merge(Mall2,aM,by.x=c("gene_Mphar","variable"),by.y=c("Gene","variable"))
+Ma$cons = "nonDE"
+Ma$cons[Ma$value.x==name1 & Ma$value.y==name1] = name1
+Ma$cons[Ma$value.x==name2 & Ma$value.y==name2] = name2
+Ma$cons[(Ma$value.x==name2 & Ma$value.y==name1) | (Ma$value.x==name1 & Ma$value.y==name2)] = "inconsistent"
+Ma$devel_cons = "nonDE"
+Ma$devel_cons[Ma$devel.x!= "nonDE" | Ma$devel.y != "nonDE"] = "inconsistent"
+Ma$devel_cons[Ma$devel.x!= "nonDE" & Ma$devel.y != "nonDE"] = "DE"
+Ma2 = Ma[,c("variable","OGGend","cons","devel_cons")]
+colnames(Ma2)[c(3,4)] = c("value","devel")
+Ma2$value = factor(Ma2$value,levels = c("nonDE","inconsistent",name1,name2))
+Ma2$devel = factor(Ma2$devel,levels = c("nonDE","inconsistent","DE"))
+
+png("~/GitHub/devnetwork/figures/DevDE_caste_conserved.png",width=4000,height=2000,res=300)
+overlapPlot(Ma2[Ma2$variable!="larva" & Ma2$variable!="pupa",])+ylab("proportion")
+dev.off()
+
+
+antDE = antSocRes[[2]]
+beeDE = beeSocRes[[2]]
+beeDE$devel = antDE$devel = "nonDE"
+beeDE$devel[beeDE$Gene %in% BeeDev] = "DE"
+antDE$devel[antDE$Gene %in% AntDev] = "DE"
+antDE$devel=factor(antDE$devel,levels = c("nonDE","DE"))
+beeDE$devel=factor(beeDE$devel,levels = c("nonDE","DE"))
+aM = melt(antDE,id.vars = c("Gene","devel"))
+aM$species = "ant"
+bM = melt(beeDE,id.vars = c("Gene","devel"))
+bM$species = "bee"
+aM$value = factor(aM$value,levels=c("nonDE","nurse","forager"))
+bM$value = factor(bM$value,levels=c("nonDE","nurse","forager"))
+
+png("~/GitHub/devnetwork/figures/DevDE_social_ant.png",width=4000,height=2000,res=300)
+overlapPlot(aM)+ylab("proportion")
+dev.off()
+
+
+png("~/GitHub/devnetwork/figures/DevDE_social_bee.png",width=4000,height=2000,res=300)
+overlapPlot(bM)+ylab("proportion")
+dev.off()
+
+name1 = "nurse"
+name2 = "forager"
+Mall = merge(aM,AB11,by.x="Gene",by.y="gene_Mphar")
+Mall2 = merge(bM,AB11,by.x="Gene",by.y="gene_Amel")
+Mall = rbind(Mall[,-c(7)],Mall2[,-c(7)])
+Ma = merge(Mall2,aM,by.x=c("gene_Mphar","variable"),by.y=c("Gene","variable"))
+Ma$cons = "nonDE"
+Ma$cons[Ma$value.x==name1 & Ma$value.y==name1] = name1
+Ma$cons[Ma$value.x==name2 & Ma$value.y==name2] = name2
+Ma$cons[(Ma$value.x==name2 & Ma$value.y==name1) | (Ma$value.x==name1 & Ma$value.y==name2)] = "inconsistent"
+Ma$devel_cons = "nonDE"
+Ma$devel_cons[Ma$devel.x!= "nonDE" | Ma$devel.y != "nonDE"] = "inconsistent"
+Ma$devel_cons[Ma$devel.x!= "nonDE" & Ma$devel.y != "nonDE"] = "DE"
+Ma2 = Ma[,c("variable","OGGend","cons","devel_cons")]
+colnames(Ma2)[c(3,4)] = c("value","devel")
+Ma2$value = factor(Ma2$value,levels = c("nonDE","inconsistent",name1,name2))
+Ma2$devel = factor(Ma2$devel,levels = c("nonDE","inconsistent","DE"))
+
+overlapPlot(Ma2[Ma2$variable!="larva" & Ma2$variable!="pupa",])
+
+MallD = ddply(Mall, ~ OGGend + variable,summarize,
+              consWorker = sum(value=="forager") == 2,
+              consQueen = sum(value=="nurse") == 2,
+              consDevel = sum(devel=="DE") == 2)
+
+p1 <- ggplot(data=MallD[MallD$consQueen==TRUE,])+
+  geom_mosaic(aes(x = product(consDevel,variable),
+                  fill = factor(consDevel)))+
+  ylab("proportion of DE genes")+
+  xlab("Stage")+
+  main_theme+
+  theme(legend.title = element_blank())+
+  theme(axis.text.x = element_text(angle = -25,hjust=0.1))
+
+ogg11 = AB11
 ogg11$DevBee = ogg11$DevAnt = 0
 ogg11$DevBee[ogg11$gene_Amel %in% BeeDev] = 1
 ogg11$DevAnt[ogg11$gene_Mphar %in% AntDev] = 1
+
 
 x <- vennCounts(ogg11[,c("DevBee","DevAnt")])
 
@@ -960,35 +1537,94 @@ t = rbind(c(x[4,3],x[3,3]),c(x[2,3],x[1,3]))
 chisq.test(t) #Highly significant
 
 #Are developmental genes caste-associated?
-ogg11$BeeQueen = ogg11$BeeWorker = ogg11$AntQueen = ogg11$AntWorker = ogg11$AntCaste = ogg11$BeeCaste = 0
+#Extract abdomen genes for later use
+ogg11 = AB11
+ogg11$DevBee = ogg11$DevAnt = 0
+ogg11$DevBee[ogg11$gene_Amel %in% BeeDev] = 1
+ogg11$DevAnt[ogg11$gene_Mphar %in% AntDev] = 1
+ogg11$abdAnt = ogg11$abdBee = "nonDE"
+ogg11$abdAnt[ogg11$gene_Mphar %in% antRes[[2]]$Gene[antRes[[2]]$abdomen =="worker"]]="worker"
+ogg11$abdAnt[ogg11$gene_Mphar %in% antRes[[2]]$Gene[antRes[[2]]$abdomen=="queen"]]="queen"
+ogg11$abdBee[ogg11$gene_Amel %in% beeRes[[2]]$Gene[beeRes[[2]]$abdomen=="worker"]]="worker"
+ogg11$abdBee[ogg11$gene_Amel %in% beeRes[[2]]$Gene[beeRes[[2]]$abdomen=="queen"]]="queen"
+ogg11$BeeQueen = ogg11$BeeWorker = ogg11$AntQueen = ogg11$AntWorker = ogg11$AntCaste = ogg11$BeeCaste = ogg11$conCaste = ogg11$conDev = ogg11$conQueen = ogg11$conWorker = 0
 ogg11$BeeQueen[ogg11$abdBee=="queen"]=1
 ogg11$BeeWorker[ogg11$abdBee=="worker"]=1
 ogg11$AntQueen[ogg11$abdAnt=="queen"]=1
 ogg11$AntWorker[ogg11$abdAnt=="worker"]=1
 ogg11$AntCaste[ogg11$abdAnt!="nonDE"]=1
 ogg11$BeeCaste[ogg11$abdBee!="nonDE"]=1
-ogg11$conInt = ogg11$conQueen = ogg11$conWorker = ogg11$conCaste = ogg11$conDev = 0
-ogg11$conInt[ogg11$intBee + ogg11$intAnt == 2] = 1
+
 ogg11$conQueen[ogg11$AntQueen + ogg11$BeeQueen == 2] = 1
 ogg11$conWorker[ogg11$AntWorker + ogg11$BeeWorker == 2] = 1
 ogg11$conCaste[ogg11$AntCaste + ogg11$BeeCaste == 2] = 1
 ogg11$conDev[ogg11$DevAnt + ogg11$DevBee == 2] = 1
 
-x <- vennCounts(ogg11[,c("conDev","conCaste")])
+x <- vennCounts(ogg11[,c("conDev","conWorker")])
 
 #Figure 2b. 
 png("~/GitHub/devnetwork/figures/DevCaste.png")
 vennDiagram(x,names = c("development","caste"))
 dev.off()
 
-x <- vennCounts(ogg11[,c("conDev","conInt")])
+####
+devOverlap <- function(devGene,DEres){
+  d = data.frame(Gene = rownames(DEres),Dev=0,DE=0)
+  d$Dev[d$Gene %in% devGene]=1
+  d$DE[DEres$FDR < 0.05]=1
+  return(d)
+}
 
-#Figure 2c. 
-png("~/GitHub/devnetwork/figures/DevInt.png")
-vennDiagram(x,names = c("development","casteXstage"))
-dev.off()
-t = rbind(c(x[4,3],x[3,3]),c(x[2,3],x[1,3]))
-chisq.test(t) #Highly significant
+devFisher <- function(devGene,tests){
+  ACD <- lapply(tests,function(x) devOverlap(devGene,x))
+  ACDvenn <- lapply(ACD,function(x) vennCounts(x[,c(2,3)]))
+  AvennChi <- lapply(ACDvenn,function(x) fisher.test(rbind(c(x[4,3],x[3,3]),c(x[2,3],x[1,3]))))
+  return(list(ACDvenn,AvennChi))
+}
+
+consDevOverlap <- function(d,col1,col2,name1,name2){
+  d = d[,colnames(d) %in% c("DevAnt","DevBee",col1,col2)]
+  d$consDev=0
+  d$consDev[d$DevAnt+d$DevBee==2]=1
+  d$consCaste = d$consQ = d$consW = d$cons_reverse = 0
+  d$consCaste[d[,col1]!="nonDE" & d[,col2] != "nonDE"]=1
+  d$consQ[d[,col1]==name1 & d[,col2] == name1]=1
+  d$consW[d[,col1]==name2 & d[,col2] == name2]=1
+  d$cons_reverse[(d[,col1]==name2 & d[,col2] == name1) | (d[,col1]==name1 & d[,col2] == name2)]=1
+  return(d)
+}
+
+ACD = devFisher(AntDev,antTests_oneLarv[c(3:5)])
+BCD = devFisher(BeeDev,beeTests_oneLarv[c(3:5)])
+ASD = devFisher(AntDev,antSocial)
+BSD = devFisher(BeeDev,beeSocial)
+
+plotOverlap <- function(dL){
+  
+}
+
+d = ogg11
+d = d[,colnames(d) %in% c("OGGend","gene_Mphar","gene_Amel","DevAnt","DevBee")]
+d = merge(d,antRes[[2]],by.x="gene_Mphar",by.y="Gene")
+d = merge(d,beeRes[[2]],by.x="gene_Amel",by.y="Gene")
+CasteDev <- lapply(c("head","thorax","abdomen"),function(x) consDevOverlap(d,paste(x,"x",sep="."),paste(x,"y",sep="."),"queen","worker"))
+CasteDev <- lapply(CasteDev,function(x) x[,c(5:9)])
+CasteDev_overlap <- lapply(CasteDev,function(x){
+  lapply(c(2:5), function(j) vennCounts(x[,c(1,j)]))
+})
+CasteDev_fisher <- lapply(unlist(CasteDev_overlap,recursive=FALSE),function(x) fisher.test(rbind(c(x[4,3],x[3,3]),c(x[2,3],x[1,3]))))
+
+d = ogg11
+d = d[,colnames(d) %in% c("OGGend","gene_Mphar","gene_Amel","DevAnt","DevBee")]
+d = merge(d,antSocRes[[2]],by.x="gene_Mphar",by.y="Gene")
+d = merge(d,beeSocRes[[2]],by.x="gene_Amel",by.y="Gene")
+CasteDev <- lapply(c("head","mesosoma","gaster"),function(x) consDevOverlap(d,paste(x,"x",sep="."),paste(x,"y",sep="."),"nurse","forager"))
+CasteDev <- lapply(CasteDev,function(x) x[,c(5:9)])
+CasteDev_overlap <- lapply(CasteDev,function(x){
+  lapply(c(2:5), function(j) vennCounts(x[,c(1,j)]))
+})
+CasteDev_fisher <- lapply(unlist(CasteDev_overlap,recursive=FALSE),function(x) fisher.test(rbind(c(x[4,3],x[3,3]),c(x[2,3],x[1,3]))))
+
 
 oggCaste <- function(a,b){
   Aq = ogg11$OGG[ogg11$gene_Mphar %in% a[[2]]]
@@ -1004,10 +1640,88 @@ oggCaste <- function(a,b){
   return(list(list(ant_cons_q,bee_cons_q),list(ant_cons_nq,bee_cons_nq)))
 }
 
-AsexRes <- lapply(ant_sexDE,extractBias)
-AcasteRes <- lapply(antTests_oneLarv[[2]][c(3:5)],function(x) extractBias(x[[2]]))
+antCaste = ogg11$gene_Mphar[ogg11$abdBee!="nonDE" & ogg11$abdAnt!="nonDE"]
+beeCaste = ogg11$gene_Amel[ogg11$abdBee!="nonDE" & ogg11$abdAnt!="nonDE"]
+
+ant_sexDE_filt = lapply(ant_sexDE,function(x) x[rownames(x) %in% antCaste,])
+AsexRes <- lapply(ant_sexDE_filt,extractBias)
+antCasteDE_filt = lapply(antTests_oneLarv[c(3:5)],function(x) x[rownames(x) %in% antCaste,] )
+AcasteRes <- lapply(antCasteDE_filt,extractBias)
+AFC <- lapply(c(1:3),function(x) FCplot_filt(AsexRes[[x]],AcasteRes[[x]]))
+
+bee_sexDE_filt = lapply(bee_sexDE,function(x) x[rownames(x) %in% beeCaste,])
+BsexRes <- lapply(bee_sexDE_filt,extractBias)
+beeCasteDE_filt = lapply(beeTests_oneLarv[c(3:5)],function(x) x[rownames(x) %in% beeCaste,] )
+BcasteRes <- lapply(beeCasteDE_filt,extractBias)
+BFC <- lapply(c(1:3),function(x) FCplot_filt(BsexRes[[x]],BcasteRes[[x]]))
+
+png("~/GitHub/devnetwork/figures/Caste_sexFC.png",height=2000,width=4000,res=300)
+grid.arrange(
+AFC[[3]][[1]]+geom_smooth(aes(color=DE),method="lm",se=FALSE)+xlab("sex bias")+ylab("caste bias")+ggtitle("ant"),
+BFC[[3]][[1]]+geom_smooth(aes(color=DE),method="lm",se=FALSE)+xlab("sex bias")+ylab("caste bias")+ggtitle("bee"),
+nrow=1)
+dev.off()
+
+AsexG = ant_sexDE[[3]]
+AsexG$Gene = rownames(AsexG)
+AcasteG = antTests_oneLarv[[5]]
+AcasteG$Gene = rownames(AcasteG)
+BsexG = bee_sexDE[[3]]
+BsexG$Gene = rownames(BsexG)
+BcasteG = beeTests_oneLarv[[5]]
+BcasteG$Gene = rownames(BcasteG)
+ogg11 = merge(ogg11,AsexG[,c(1,6)],by.x="gene_Mphar",by.y="Gene")
+ogg11 = merge(ogg11,AcasteG[,c(1,6)],by.x="gene_Mphar",by.y="Gene")
+ogg11 = merge(ogg11,BsexG[,c(1,6)],by.x="gene_Amel",by.y="Gene")
+ogg11 = merge(ogg11,BcasteG[,c(1,6)],by.x="gene_Amel",by.y="Gene")
+colnames(ogg11)[c(6:9)] = c("sexAnt","casteAnt","sexBee","casteBee")
+ogg11$casteDE = "nonDE"
+ogg11$casteDE[ogg11$abdBee!="nonDE" & ogg11$abdAnt != "nonDE"]="flipped"
+ogg11$casteDE[ogg11$abdBee=="queen" & ogg11$abdAnt == "queen"]="queen_both"
+ogg11$casteDE[ogg11$abdBee=="worker" & ogg11$abdAnt == "worker"]="worker_both"
+
+
+p1 <- ggplot(ogg11[ogg11$casteDE!="nonDE",],aes(x = -sexAnt,y=-casteAnt,color=casteDE))+
+  geom_point(alpha=0.5)+main_theme+
+  theme(legend.position = c(0.8,0.2))+
+  xlab("logFC (ant queen/ant male)")+
+  ylab("logFC (ant queen/ant worker)")
+
+p2 <- ggplot(ogg11[ogg11$casteDE!="nonDE",],aes(x = -sexBee,y=-casteBee,color=casteDE))+
+  geom_point(alpha=0.5)+main_theme+
+  theme(legend.position = c(0.8,0.2))+
+  xlab("logFC (bee queen/bee male)")+
+  ylab("logFC (bee queen/bee worker)")
+
+p3 <- ggplot(ogg11[ogg11$casteDE!="nonDE",],aes(x = -sexBee,y=-sexAnt,color=casteDE))+
+  geom_point(alpha=0.5)+main_theme+
+  theme(legend.position = c(0.8,0.2))+
+  xlab("logFC (bee queen/bee male)")+
+  ylab("logFC (ant queen/ant male)")
+
+png("~/GitHub/devnetwork/figures/Caste_Sex.png",width=5000,height=2000,res=300)
+grid.arrange(p1,p2,p3,nrow=1)
+dev.off()
+
+ant_OGG = merge(ogg11[,c(1:5)],AsexG[,c(1,6)],by.x="gene_Mphar",by.y="Gene",all.y=T)
+ant_OGG = merge(ant_OGG,AcasteG[,c(1,6)],by.x="gene_Mphar",by.y="Gene",all.y=T)
+ant_OGG = ant_OGG[ant_OGG$gene_Mphar %in% rownames(antTests_oneLarv[[5]])[antTests_oneLarv[[5]]$FDR < 0.05],]
+colnames(ant_OGG)[c(6,7)] = c("antSex","antCaste")
+ant_OGG$casteDE = "LS_noOGG"
+ant_OGG$casteDE[!is.na(ant_OGG$abdBee)] = "LS_OGG"
+ant_OGG$casteDE[ant_OGG$abdBee!="nonDE" & !is.na(ant_OGG$abdBee)] = "consDE"
+
+fac = "consDE"
+cor.test(ant_OGG$antSex[ant_OGG$casteDE==fac],ant_OGG$antCaste[ant_OGG$casteDE==fac])
+ggplot(ant_OGG,aes(x = antSex,y=antCaste,color=casteDE))+
+  geom_point(alpha=0.5)
+
+
 AvmRes <- lapply(ant_VM,extractBias)
 AsocRes <- lapply(antSocial,extractBias)
+AsexRes <- lapply(ant_sexDE,extractBias)
+AcasteRes <- lapply(antTests_oneLarv[c(3:5)],function(x) extractBias(x))
+
 AFC <- lapply(c(1:3),function(x) FCplot(AsexRes[[x]],AcasteRes[[x]]))
 AFC_vm <- lapply(c(1:3),function(x) FCplot(AvmRes[[x]],AcasteRes[[x]]))
 AFC_NF_caste <- lapply(c(1:3),function(x) FCplot(AsocRes[[x]],AcasteRes[[x]]))
@@ -1015,7 +1729,7 @@ AFC_NF_sex <- lapply(c(1:3),function(x) FCplot(AsocRes[[x]],AsexRes[[x]]))
 AFC_NF_vm <- lapply(c(1:3),function(x) FCplot(AsocRes[[x]],AvmRes[[x]]))
 
 BsexRes <- lapply(bee_sexDE,extractBias)
-BcasteRes <- lapply(beeTests_oneLarv[[2]][c(3:5)],function(x) extractBias(x[[2]]))
+BcasteRes <- lapply(beeTests_oneLarv[c(3:5)],function(x) extractBias(x))
 BvmRes <- lapply(bee_VM,extractBias)
 BsocRes <- lapply(beeSocial,extractBias)
 BFC <- lapply(c(1:3),function(x) FCplot(BsexRes[[x]],BcasteRes[[x]]))
@@ -1028,18 +1742,32 @@ AFCplot <- lapply(AFC,function(x) x[[1]]+ylab("queen/worker log2 FC")+xlab("quee
 legend <- g_legend(AFCplot[[1]]+theme(legend.position="right"))
 
 png("~/GitHub/devnetwork/figures/scLFCant.png",height=2000,width=2000,res=300)
-grid.arrange(AFCplot[[1]]+theme(legend.position="hidden")+ggtitle("head"),
-             AFCplot[[2]]+theme(legend.position="hidden")+ggtitle("thorax"),
-             AFCplot[[3]]+theme(legend.position="hidden")+ggtitle("abdomen"),legend,ncol=2)
+grid.arrange(AFCplot[[1]]+theme(legend.position="hidden")+ggtitle("ant head"),
+             AFCplot[[2]]+theme(legend.position="hidden")+ggtitle("ant thorax"),
+             AFCplot[[3]]+theme(legend.position="hidden")+ggtitle("ant abdomen"),legend,ncol=2)
+dev.off()
+
+AFCplot <- lapply(AFC_NF_sex,function(x) x[[1]]+ylab("nurse/forager log2 FC")+xlab("queen/male log2 FC"))
+png("~/GitHub/devnetwork/figures/socLFCant.png",height=2000,width=4000,res=300)
+grid.arrange(AFCplot[[1]]+theme(legend.position="none")+ggtitle("head"),
+             AFCplot[[2]]+theme(legend.position="none")+ggtitle("thorax"),
+             AFCplot[[3]]+theme(legend.position="none")+ggtitle("abdomen"),ncol=3)
+dev.off()
+
+AFCplot <- lapply(BFC_NF_sex,function(x) x[[1]]+ylab("nurse/forager log2 FC")+xlab("queen/male log2 FC"))
+png("~/GitHub/devnetwork/figures/socLFCbee.png",height=2000,width=4000,res=300)
+grid.arrange(AFCplot[[1]]+theme(legend.position="none")+ggtitle("head"),
+             AFCplot[[2]]+theme(legend.position="none")+ggtitle("thorax"),
+             AFCplot[[3]]+theme(legend.position="none")+ggtitle("abdomen"),ncol=3)
 dev.off()
 
 BFCplot <- lapply(BFC,function(x) x[[1]]+ylab("queen/worker log2 FC")+xlab("queen/male log2 FC"))
 legend <- g_legend(BFCplot[[1]]+theme(legend.position="right"))
 
-png("~/GitHub/devnetwork/figures/scLFCbee.png",height=2000,width=2000,res=300)
-grid.arrange(BFCplot[[1]]+theme(legend.position="hidden")+ggtitle("head"),
-             BFCplot[[2]]+theme(legend.position="hidden")+ggtitle("thorax"),
-             BFCplot[[3]]+theme(legend.position="hidden")+ggtitle("abdomen"),legend,ncol=2)
+png("~/GitHub/devnetwork/figures/scLFCbee.png",height=2000,width=4000,res=300)
+grid.arrange(BFCplot[[1]]+theme(legend.position="none")+ggtitle("head"),
+             BFCplot[[2]]+theme(legend.position="none")+ggtitle("thorax"),
+             BFCplot[[3]]+theme(legend.position="none")+ggtitle("abdomen"),ncol=3)
 dev.off()
 
 consCaste <- mapply(oggCaste,AcasteRes,BcasteRes,SIMPLIFY=FALSE)
@@ -1070,6 +1798,112 @@ BeeSC$conCaste = 0
 BeeSC$conCaste[BeeSC$Gene %in% c(as.character(consCaste[[3]][[1]][[2]]),as.character(consCaste[[3]][[2]][[2]]))] = 1
 ggplot(BeeSC,aes(x=-FC.x,y=-FC.y,color=as.factor(conCaste)))+
   geom_point()+geom_smooth()
+
+
+euclDist <- function(res){
+  cb = apply(res[,-c(1)],1,function(x) sqrt(sum(x^2))/length(x))
+  cb_noAbd = apply(res[,-c(1,ncol(res))],1,function(x) sqrt(sum(x^2))/length(x))
+  cb_noAdult = apply(res[,-c(1,(ncol(res) - 2):ncol(res))],1,function(x) sqrt(sum(x^2))/length(x))
+  cb_larva = apply(res[,-c(1,(ncol(res) - 3):ncol(res))],1,function(x) sqrt(sum(x^2))/length(x))
+  cb_adult = apply(res[,-c(1:(ncol(res) - 3))],1,function(x) sqrt(sum(x^2))/length(x))
+  cb_abd = apply(as.data.frame(res[,-c(1:(ncol(res) - 1))]),1,function(x) sqrt(sum(x^2))/length(x))
+  results = data.frame(Gene = res$Gene,cb=cb,cb_noAbd=cb_noAbd,cb_noAdult=cb_noAdult,cb_larva=cb_larva,cb_adult = cb_adult,cb_abd=cb_abd)
+  return(results)
+}
+
+cbScatter <- function(CB,col1,col2){
+  p <- ggplot(CB,aes_q(x=as.name(col1),
+              y=as.name(col2)))+
+    geom_point(alpha = 0.5,size = 0.7)+
+    geom_smooth(se=FALSE,method="lm")+
+    main_theme
+  test = cor.test(CB[,col1],CB[,col2],method="spearman")
+  return(list(p,test))
+}
+
+antCB = euclDist(antRes_allstage[[1]])
+beeCB = euclDist(beeRes_allstage[[1]])
+antCBS = data.frame(Gene = antSocRes[[1]]$Gene,Soc_bias=apply(antSocRes[[1]][,-c(1)],1,function(x) sqrt(sum(x^2))/length(x)))
+beeCBS = data.frame(Gene = beeSocRes[[1]]$Gene,Soc_bias=apply(beeSocRes[[1]][,-c(1)],1,function(x) sqrt(sum(x^2))/length(x)))
+ant_bias = merge(antCB,antCBS,by="Gene")
+bee_bias = merge(beeCB,beeCBS,by="Gene")
+
+png("~/GitHub/devnetwork/figures/cb_cor.png",width=4000,height=5000,res=300)
+grid.arrange(cbScatter(ant_bias,"cb_larva","cb_adult")[[1]]+ggtitle("ant"),
+             cbScatter(bee_bias,"cb_larva","cb_adult")[[1]]+ggtitle("bee"),
+             cbScatter(ant_bias,"cb_larva","Soc_bias")[[1]]+ggtitle("ant"),
+             cbScatter(bee_bias,"cb_larva","Soc_bias")[[1]]+ggtitle("bee"),
+             cbScatter(ant_bias,"cb_adult","Soc_bias")[[1]]+ggtitle("ant"),
+             cbScatter(bee_bias,"cb_adult","Soc_bias")[[1]]+ggtitle("bee"),nrow=3)
+dev.off()
+
+ABcb = merge(ant_bias,AB11,by.x = "Gene",by.y="gene_Mphar")
+ABcb = merge(ABcb,bee_bias,by.x="gene_Amel",by.y="Gene")
+ABcb = merge(ABcb,melt(antDE,id.vars="Gene"),by="Gene")
+ABcb = merge(ABcb,melt(beeDE,id.vars="Gene"),by.x=c("variable","gene_Amel"),by.y=c("variable","Gene"))
+
+ABcb$cons = "nonDE"
+ABcb$cons[ABcb$value.x!=ABcb$value.y] = "inconsistent"
+ABcb$cons[ABcb$value.x=="worker" & ABcb$value.y=="worker"] = "worker"
+ABcb$cons[ABcb$value.x=="queen" & ABcb$value.y=="queen"] = "queen"
+ABcb$casteDE = ABcb$cons
+ABcb$casteDE[ABcb$value.x=="worker" & ABcb$value.y=="queen"] = "AW-BQ"
+ABcb$casteDE[ABcb$value.x=="worker" & ABcb$value.y=="nonDE"] = "AW-NDE"
+ABcb$casteDE[ABcb$value.x=="queen" & ABcb$value.y=="worker"] = "AQ-BW"
+ABcb$casteDE[ABcb$value.x=="queen" & ABcb$value.y=="nonDE"] = "AQ-NDE"
+ABcb$casteDE[ABcb$value.x=="nonDE" & ABcb$value.y=="queen"] = "NDE-BQ"
+ABcb$casteDE[ABcb$value.x=="nonDE" & ABcb$value.y=="worker"] = "NDE-BW"
+
+png("~/GitHub/devnetwork/figures/cb_cor_species.png",width=6000,height=2000,res=300)
+grid.arrange(cbScatter(ABcb,"cb_larva.x","cb_larva.y")[[1]],
+             cbScatter(ABcb,"cb_adult.x","cb_adult.y")[[1]],
+             cbScatter(ABcb,"Soc_bias.x","Soc_bias.y")[[1]],nrow=1)
+dev.off()
+
+allCB = merge(ant_bias,AB11,by.x = "Gene",by.y="gene_Mphar")
+allCB$species = "Mphar"
+allCB2 = merge(bee_bias,AB11,by.x = "Gene",by.y="gene_Amel")
+allCB2$species="Amel"
+allCB3 = rbind(allCB[,-c(10)],allCB2[-c(10)])
+allCB3 = merge(allCB3,ABcb[,c("OGGend","cons","variable","casteDE")],by = "OGGend")
+allCB3$cons = factor(allCB3$cons,levels = c("nonDE","inconsistent","queen","worker"))
+
+png("~/GitHub/devnetwork/figures/DEtype_castebias.png",width=2000,height=2000,res=300)
+ggplot(allCB3[allCB3$variable=="abdomen",],aes(y=cb_larva,x=species,fill = cons))+
+  geom_boxplot(notch=TRUE,outlier.shape=NA)+
+  xlab("DE type")+
+  ylab("larval caste bias")+
+  ylim(0,1.25)+
+  main_theme
+dev.off()
+
+png("~/GitHub/devnetwork/figures/DEtype_castebias.png",width=2000,height=2000,res=300)
+ggplot(allCB3[allCB3$variable=="abdomen",],aes(y=cb_larva,x=species,fill = casteDE))+
+  geom_boxplot(notch=TRUE,outlier.shape=NA)+
+  xlab("DE type")+
+  ylab("larval caste bias")+
+  ylim(0,1.25)+
+  main_theme
+dev.off()
+
+ant_allFC = merge(antRes_allstage[[1]],antSocRes[[1]],by="Gene")
+
+bee_allFC = merge(beeRes_allstage[[1]],beeSocRes[[1]],by="Gene")
+
+png("~/GitHub/devnetwork/figures/cb_cor.png",width=5000,height=4000,res=300)
+grid.arrange(cbScatter(ant_allFC,"8_gaster","gaster")[[1]]+ggtitle("ant abd")+ylab("for/nurse logFC")+xlab("W/Q logFC"),
+             cbScatter(ant_allFC,"8_mesosoma","mesosoma")[[1]]+ggtitle("ant thorax")+ylab("for/nurse logFC")+xlab("W/Q logFC"),
+             cbScatter(ant_allFC,"8_head","head")[[1]]+ggtitle("ant head")+ylab("for/nurse logFC")+xlab("W/Q logFC"),
+             cbScatter(bee_allFC,"8_gaster","gaster")[[1]]+ggtitle("bee abd")+ylab("for/nurse logFC")+xlab("W/Q logFC"),
+             cbScatter(bee_allFC,"8_mesosoma","mesosoma")[[1]]+ggtitle("bee thorax")+ylab("for/nurse logFC")+xlab("W/Q logFC"),
+             cbScatter(bee_allFC,"8_head","head")[[1]]+ggtitle("bee head")+ylab("for/nurse logFC")+xlab("W/Q logFC"),nrow=2)
+dev.off()
+
+#Load ps 
+Amel_acu <- read.table("~/GitHub/devnetwork/phylo_results/Amel_acu")
+Amel_blast <- read.table("~/Gi")
+
+
 
 
 
@@ -1118,13 +1952,68 @@ sexGenes$Gene = rownames(sexGenes)
 DmelDat = data.frame(Gene = names(eggWLFC),eggCV = eggCV, develCV = develCV, eggFC = eggWLFC, develFC = develWLFC)
 DmelDat = merge(DmelDat,sexGenes,by = "Gene")
 
-Dmel_oggDat = merge(DmelDat,ogg3f,by.x="Gene",by.y="V2")
+Dmel_oggDat = merge(DmelDat,AB111,by="Gene")
 Dogg = merge(Dmel_oggDat,ogg11,by="gene_Mphar")
 
-BcasteDmel <- lapply(BcasteRes,function(x) merge(x[[1]],Dmel_oggDat,by.x="Gene",by.y="gene_Amel"))
-BCd = lapply(BcasteDmel,function(x) cor.test(x$FC,x$logFC,method="spearman"))
-AcasteDmel <- lapply(AcasteRes,function(x) merge(x[[1]],Dmel_oggDat,by.x="Gene",by.y="gene_Mphar"))
-ACd = lapply(AcasteDmel,function(x) cor.test(x$FC,x$logFC,method="spearman"))
+Dabd = merge(ogg11,Dmel_oggDat,by="OGGend")
+Dabd$casteDE[Dabd$abdBee=="queen" & Dabd$abdAnt=="worker"] = "BQ-AW"
+Dabd$casteDE[Dabd$abdBee=="worker" & Dabd$abdAnt=="queen"] = "BW-AQ"
+Dabd$casteDE[Dabd$abdBee=="worker" & Dabd$abdAnt=="nonDE"] = "BW-NDE"
+Dabd$casteDE[Dabd$abdBee=="queen" & Dabd$abdAnt=="nonDE"] = "BQ-NDE"
+Dabd$casteDE[Dabd$abdBee=="nonDE" & Dabd$abdAnt=="worker"] = "AW-NDE"
+Dabd$casteDE[Dabd$abdBee=="nonDE" & Dabd$abdAnt=="queen"] = "AQ-NDE"
+
+png("~/GitHub/devnetwork/figures/DE_dmelCasteLogFC.png",width=2000,height=2000,res=300)
+ggplot(Dabd,aes(x = casteDE,y=-logFC))+
+  geom_violin()+
+  ylab("logFC (dmel female/dmel male)")+
+  geom_boxplot(notch=TRUE,width=0.2,outlier.shape = NA)+
+  main_theme+
+  theme(axis.text.x = element_text(angle=-25,hjust=0.1),
+        plot.margin = unit(c(0.5,1.4,0.5,0.5),"cm"))
+dev.off()
+
+
+AcasteDmel <- lapply(antTests_oneLarv[c(3:5)],function(x){
+  x$Gene = rownames(x)
+  return(merge(x,Dmel_oggDat,by.x="Gene",by.y="gene_Mphar"))
+})
+AdPlot <- lapply(AcasteDmel,DmelSexFC)
+
+Adplot <- lapply(AdPlot,function(x) x[[1]]+ylab("ant queen/worker log2 FC")+xlab("Dmel female/male log2 FC"))
+
+BcasteDmel <- lapply(beeTests_oneLarv[c(3:5)],function(x){
+  x$Gene = rownames(x)
+  return(merge(x,Dmel_oggDat,by.x="Gene",by.y="gene_Amel"))
+})
+BdPlot <- lapply(BcasteDmel,DmelSexFC)
+
+Bdplot <- lapply(BdPlot,function(x) x[[1]]+ylab("bee queen/worker log2 FC")+xlab("Dmel female/male log2 FC"))
+
+png("~/GitHub/devnetwork/figures/scLFCant_dmel.png",height=2000,width=4000,res=300)
+grid.arrange(Adplot[[1]]+theme(legend.position="none")+ggtitle("head"),
+             Adplot[[2]]+theme(legend.position="none")+ggtitle("thorax"),
+             Adplot[[3]]+theme(legend.position="none")+ggtitle("abdomen"),ncol=3)
+dev.off()
+
+png("~/GitHub/devnetwork/figures/scLFCbee_dmel.png",height=2000,width=4000,res=300)
+grid.arrange(Bdplot[[1]]+theme(legend.position="none")+ggtitle("head"),
+             Bdplot[[2]]+theme(legend.position="none")+ggtitle("thorax"),
+             Bdplot[[3]]+theme(legend.position="none")+ggtitle("abdomen"),ncol=3)
+dev.off()
+
+
+DmelSexFC <- function(data){
+  data$DE = "nonDE"
+  data$DE[data$logFC.x < 0 & data$logFC.y < 0 & data$FDR.x < 0.05 & data$FDR.y < 0.05] = "female-upregulated"
+  data$DE[data$logFC.x > 0 & data$logFC.y > 0 & data$FDR.x < 0.05 & data$FDR.y < 0.05] = "female-downregulated"
+  p <- ggplot(data,aes(x = -logFC.y,y = -logFC.x))+ #Queen-up will be positive
+    geom_point(aes(color = DE),alpha=0.5)+
+    geom_smooth(method="lm",se=FALSE,color="black")+
+    scale_color_manual(values = c("blue","red","grey60"))+
+    main_theme
+  return(list(p,cor.test(data$logFC.x,data$logFC.y,method = "spearman"),table(data$DE)))
+}
 
 dmelF_B <- Dmel_oggDat$gene_Amel[Dmel_oggDat$FDR < 0.05 & Dmel_oggDat$logFC < 0]
 dmelF_A <- Dmel_oggDat$gene_Amel[Dmel_oggDat$FDR < 0.05 & Dmel_oggDat$logFC < 0]
@@ -1498,7 +2387,16 @@ ogg3f$MpharDev[ogg3f$gene_Mphar %in% AntDev] = 1
 ogg3f$DmelDev[ogg3f$V2 %in% DmelCV$Gene[DmelCV$egg_FC < 0.05/nrow(DmelCV)]]=1
 ogg3f$hymDev[ogg3f$ApisDev+ogg3f$MpharDev==2]=1
 
-
+antT = antT[rowSums(antT) > 0,]
+Agenes = data.frame(Gene=rownames(antT),index = seq(0,(nrow(antT) - 1)))
+beeT = beeT[rowSums(beeT) > 0,]
+Bgenes = data.frame(Gene=rownames(beeT),index = seq(0,(nrow(beeT) - 1)))
+AB1 = merge(AB11,Agenes,by.x="gene_Mphar",by.y="Gene")
+AB1 = merge(AB1,Bgenes,by.x="gene_Amel",by.y="Gene")
+AB1$a1 = 1
+AB1$a2 = 2
+AB1$a3 = 1
+write.table(AB1[,c(6:8,4,5)],file="~/GitHub/devnetwork/data/orthologymap_integers.txt",col.names=FALSE,row.names = FALSE,sep='\t')
 
 
 
