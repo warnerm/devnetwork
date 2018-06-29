@@ -1,19 +1,19 @@
 using Distributions
 #using DistributedArrays
 
-# addprocs(parse(Int,ARGS[6]))
-# #
-# input1 = ARGS[1]
-# input2 = ARGS[2]
-# output1 = ARGS[3]
-# output2 = ARGS[4]
-# OGGmap = ARGS[5]
-input2 = "../../../../Data/devnetwork/beeNetSmall.csv"
-input1 = "../../../../Data/devnetwork/ant100_net.csv"
-output2 = "../../../../Data/devnetwork/beeNetSmall_clust.csv"
-output1 = "../../../../Data/devnetwork/ant100_net_clust.csv"
-OGGmap = "../../../../Data/devnetwork/OGGmap.txt"
-addprocs(2)
+addprocs(parse(Int,ARGS[6]))
+#
+input1 = ARGS[1]
+input2 = ARGS[2]
+output1 = ARGS[3]
+output2 = ARGS[4]
+OGGmap = ARGS[5]
+# input2 = "../../../../Data/devnetwork/beeNetSmall.csv"
+# input1 = "../../../../Data/devnetwork/ant100_net.csv"
+# output2 = "../../../../Data/devnetwork/beeNetSmall_clust.csv"
+# output1 = "../../../../Data/devnetwork/ant100_net_clust.csv"
+# OGGmap = "../../../../Data/devnetwork/OGGmap.txt"
+# addprocs(2)
 
 #First, find number of genes
 function getNgene(file)
