@@ -97,13 +97,13 @@ function move()
     passed = 0
     @eval @everywhere test_node = $node
     if newEnergy < oldEnergy
-        @eval @everywhere spins[$net][test_node] = $edit_spin
+        spins[net][test_node] = edit_spin
         passed = 1
     else
         prob = exp(-(newEnergy - oldEnergy)/(temp))
         test_num = rand(Uniform(0,1))
         if prob > test_num
-            @eval @everywhere spins[$net][test_node] = $edit_spin
+            spins[net][test_node] = edit_spin
             passed = 1
         end
     end
@@ -165,9 +165,7 @@ nGene = [nGene1,nGene2]
 @everywhere tot_pos = [sum(Adj_all[j]) for j=1:2]
 @everywhere pos_in = [sum(Adj_all[j],1) for j=1:2]
 @everywhere pos_out = [sum(Adj_all[j],2) for j=1:2]
-spin_list = [Initialize(nGene[i]) for i=1:2]
-@eval @everywhere spins = $spin_list
-
+spins = [Initialize(nGene[i]) for i=1:2]
 
 for iter=1:10000
     success = 0
