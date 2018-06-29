@@ -83,7 +83,7 @@ end
 @everywhere begin
     #Objective function to test energy with respect to given node
     function nodeEnergy(j)
-        return (Adj_all[n][i,j]+Adj_all[n][j,i] -  pos_out[n][i]*pos_in[n][j]/(2*tot_pos[n]) - pos_in[n][i]*pos_out[n][j]/(2*tot_pos[n]))
+        return (Adj_all[n][i,j]+Adj_all[n][j,i] -  (pos_out[n][i]*pos_in[n][j]+pos_in[n][i]*pos_out[n][j])/(2*tot_pos[n]))
     end
 end
 
