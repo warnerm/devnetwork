@@ -148,7 +148,7 @@ begin
         srand()
         spins = [Initialize(nGene[i]) for i=1:2]
         temp = initial_temp
-        for i=1:10
+        while true
             success = 0
             for e=1:epochs
                 passed = move(spins,temp)
