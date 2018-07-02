@@ -7,10 +7,10 @@ using Distributions
 # input2 = ARGS[2]
 # OGGmap = ARGS[3]
 
-
-input2 = "../../../../Data/devnetwork/beeSmall"
-input1 = "../../../../Data/devnetwork/antSmall"
-OGGmap = "../../../../Data/devnetwork/OGGmap.txt"
+#
+# input2 = "../../../../Data/devnetwork/beeSmall"
+# input1 = "../../../../Data/devnetwork/antSmall"
+# OGGmap = "../../../../Data/devnetwork/OGGmap.txt"
 
 pos1 = string(input1,"pos.txt")
 neg1 = string(input1,"neg.txt")
@@ -158,7 +158,7 @@ function OGGmat(dict,dict_ogg,weights)
 end
 
 temp = .05
-epochs = 10
+epochs = 100
 max_mods = 250
 coupling_constant = 3
 srand()
@@ -197,10 +197,17 @@ neg_adj = [(neg[i]*neg[i]')/(2*tot_neg[i]) for i=1:2]
 #We are basically just going to be evaluating the contribution of a pair of nodes to the network, so may as well
 #compute the whole thing before hand
 AdjMat = [Adj_pos[i]-Adj_neg[i]-pos_adj[i]+neg_adj[i] for i=1:2]
+for n=1:2
+    for i=1:nGene[n],j=1:nGene[n]
+        if i == j
+            AdjMat[n][i,j] = 0
+        end
+    end
+end
 
 spins = [Initialize(nGene[i]) for i=1:2]
 
-for iter=1:10000
+for iter=1:1000000
     success = 0
     for e=1:epochs
         @time passed = move()
