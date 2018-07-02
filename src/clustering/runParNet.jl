@@ -1,23 +1,23 @@
-addprocs(2)
+#addprocs(2)
 
-# addprocs(parse(Int,ARGS[6]))
-# #
-# input1 = ARGS[1]
-# input2 = ARGS[2]
-# OGGmap = ARGS[3]
-# @eval @everywhere output1 = $ARGS[4]
-# @eval @everywhere output2 = $ARGS[5]
-# boots = ARGS[7]
-
+addprocs(parse(Int,ARGS[6]))
 #
-input2 = "../../../../Data/devnetwork/beeSmall"
-input1 = "../../../../Data/devnetwork/antSmall"
-OGGmap = "../../../../Data/devnetwork/OGGmap.txt"
-@everywhere output1 = "../../../../Data/devnetwork/antTest"
-@everywhere output2 = "../../../../Data/devnetwork/beeTest"
+input1 = ARGS[1]
+input2 = ARGS[2]
+OGGmap = ARGS[3]
+@eval @everywhere output1 = $ARGS[4]
+@eval @everywhere output2 = $ARGS[5]
+boots = ARGS[7]
+#
+# #
+# input2 = "../../../../Data/devnetwork/beeSmall"
+# input1 = "../../../../Data/devnetwork/antSmall"
+# OGGmap = "../../../../Data/devnetwork/OGGmap.txt"
+# @everywhere output1 = "../../../../Data/devnetwork/antTest"
+# @everywhere output2 = "../../../../Data/devnetwork/beeTest"
 @everywhere include("smallNet_2species.jl")
 
-boots=3
+#boots=3
 
 pos1 = string(input1,"pos.txt")
 neg1 = string(input1,"neg.txt")
@@ -26,7 +26,7 @@ neg2 = string(input2,"neg.txt")
 
 
 @everywhere initial_temp = 1
-@everywhere epochs = 10
+@everywhere epochs = 1000
 @everywhere max_mods = 250
 @everywhere coupling_constant = 3
 @everywhere cooling_constant = 0.9
