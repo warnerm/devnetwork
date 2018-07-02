@@ -187,12 +187,12 @@ AdjMatOGG = OGGmat(dict,dict_ogg,weights)
 Adj_pos = [diagMat(M) for M in [Adj1pos,Adj2pos]]
 Adj_neg = [diagMat(M) for M in [Adj1neg,Adj2neg]]
 
-tot_pos = [sum(Adj_all_pos[j]) for j=1:2]
-pos = [sum(Adj_all_pos[j],2) for j=1:2]
+tot_pos = [sum(Adj_pos[j]) for j=1:2]
+pos = [sum(Adj_pos[j],2) for j=1:2]
 pos_adj = [(pos[i]*pos[i]')/(2*tot_pos[i]) for i=1:2]
 
-tot_neg = [sum(Adj_all_neg[j]) for j=1:2]
-neg = [sum(Adj_all_neg[j],2) for j=1:2]
+tot_neg = [sum(Adj_neg[j]) for j=1:2]
+neg = [sum(Adj_neg[j],2) for j=1:2]
 neg_adj = [(neg[i]*neg[i]')/(2*tot_neg[i]) for i=1:2]
 
 #We are basically just going to be evaluating the contribution of a pair of nodes to the network, so may as well
@@ -211,7 +211,7 @@ spins = [Initialize(nGene[i]) for i=1:2]
 for iter=1:1000000
     success = 0
     for e=1:epochs
-        @time passed = move()
+        passed = move()
         success = success+passed
     end
     println(success/epochs)
