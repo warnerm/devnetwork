@@ -3,9 +3,9 @@ using Distributions
 #
 # addprocs(parse(Int,ARGS[4]))
 #
-# input1 = ARGS[1]
-# input2 = ARGS[2]
-# OGGmap = ARGS[3]
+input1 = ARGS[1]
+input2 = ARGS[2]
+OGGmap = ARGS[3]
 
 #
 # input2 = "../../../../Data/devnetwork/beeSmall"
@@ -177,12 +177,13 @@ Adj1pos = getAdj(pos1,nGene1)
 Adj1neg = getAdj(neg1,nGene1)
 Adj2pos = getAdj(pos2,nGene2)
 Adj2neg = getAdj(neg2,nGene2)
+nGene = [nGene1,nGene2]
+
 
 #Load orthology, make a dictionary
 dict,dict_ogg,weights = genDictionary(OGGmap)
 AdjMatOGG = OGGmat(dict,dict_ogg,weights)
 
-nGene = [nGene1,nGene2]
 Adj_pos = [diagMat(M) for M in [Adj1pos,Adj2pos]]
 Adj_neg = [diagMat(M) for M in [Adj1neg,Adj2neg]]
 
