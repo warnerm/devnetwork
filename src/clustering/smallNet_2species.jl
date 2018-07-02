@@ -1,25 +1,23 @@
 using Distributions
 #using DistributedArrays
-
-# addprocs(parse(Int,ARGS[6]))
+#
+# addprocs(parse(Int,ARGS[4]))
 #
 # input1 = ARGS[1]
 # input2 = ARGS[2]
-# output1 = ARGS[3]
-# output2 = ARGS[4]
-# OGGmap = ARGS[5]
+# OGGmap = ARGS[3]
+
 
 input2 = "../../../../Data/devnetwork/beeSmall"
 input1 = "../../../../Data/devnetwork/antSmall"
-output2 = "../../../../Data/devnetwork/beeNetSmall_clust.csv"
-output1 = "../../../../Data/devnetwork/ant100_net_clust.csv"
 OGGmap = "../../../../Data/devnetwork/OGGmap.txt"
-addprocs(2)
 
 pos1 = string(input1,"pos.txt")
 neg1 = string(input1,"neg.txt")
 pos2 = string(input2,"pos.txt")
 neg2 = string(input2,"neg.txt")
+output1 = string(input1,"net_clust.csv")
+output2 = string(input2,"net_clust.csv")
 
 #First, find number of genes
 function getNgene(file)
@@ -63,9 +61,8 @@ function calcPartial(node,indiv_spin,net)
     @eval @everywhere i = $node
     @eval @everywhere n = $net
     sameMod = [j for j in  1:nGene[net] if spins[net][j] == indiv_spin]
-    if length(sameMod) != 0
-        energy = pmap((args)->nodeEnergy(args...),sameMod)
-        energy_all = sum(energy)
+    if length(sameMod) > 0
+        energy_all = sum([AdjMat[net][node,j] for j in sameMod])
     else
         energy_all = 0
     end
@@ -85,15 +82,13 @@ function calcPartial(node,indiv_spin,net)
     end
     return -energy_all
 end
-
-@everywhere begin
-    #Objective function to test energy with respect to given node
-    function nodeEnergy(j)
-        return (Adj_all_pos[n][i,j]+Adj_all_pos[n][j,i] - Adj_all_neg[n][i,j] - Adj_all_neg[n][j,i] -
-          (pos_out[n][i]*pos_in[n][j]+pos_in[n][i]*pos_out[n][j])/(2*tot_pos[n]) +
-          (neg_out[n][i]*neg_in[n][j]+neg_in[n][i]*neg_out[n][j])/(2*tot_neg[n]))
-    end
-end
+#
+# @everywhere begin
+#     #Objective function to test energy with respect to given node
+#     function nodeEnergy(j)
+#         return (Adj_all_pos[n][i,j]-Adj_all_neg[n][i,j] - posA[n][i,j] + negA[n][i,j])
+#     end
+# end
 
 function move()
     net = rand(1:2)
@@ -149,14 +144,19 @@ function genDictionary(OGGfile)
     return all_dict,all_ogg,weights
 end
 
+function diagMat(M)
+    newMat = [M[i,j] + M[j,i] for i=1:size(M,1),j=1:size(M,1)]
+    return newMat
+end
+
 temp = .05
-epochs = 50
+epochs = 10
 max_mods = 250
 coupling_constant = 3
 srand()
 
 #Functions to update temperature and number of iterations per epoch
-tf(t) = 0.5*t
+tf(t) = 0.9*t
 itf(length) = floor(Int,1.0*length)
 
 nGene1 = getNgene(pos1)
@@ -174,22 +174,27 @@ Adj2neg = getAdj(neg2,nGene2)
 dict,dict_ogg,weights = genDictionary(OGGmap)
 
 nGene = [nGene1,nGene2]
-@eval @everywhere Adj_all_pos = [$Adj1pos,$Adj2pos]
-@eval @everywhere Adj_all_neg = [$Adj1neg,$Adj2neg]
+Adj_pos = [diagMat(M) for M in [Adj1pos,Adj2pos]]
+Adj_neg = [diagMat(M) for M in [Adj1neg,Adj2neg]]
 
-@everywhere tot_pos = [sum(Adj_all_pos[j]) for j=1:2]
-@everywhere pos_in = [sum(Adj_all_pos[j],1) for j=1:2]
-@everywhere pos_out = [sum(Adj_all_pos[j],2) for j=1:2]
-@everywhere tot_neg = [sum(Adj_all_neg[j]) for j=1:2]
-@everywhere neg_in = [sum(Adj_all_neg[j],1) for j=1:2]
-@everywhere neg_out = [sum(Adj_all_neg[j],2) for j=1:2]
+tot_pos = [sum(Adj_all_pos[j]) for j=1:2]
+pos = [sum(Adj_all_pos[j],2) for j=1:2]
+pos_adj = [(pos[i]*pos[i]')/(2*tot_pos[i]) for i=1:2]
+
+tot_neg = [sum(Adj_all_neg[j]) for j=1:2]
+neg = [sum(Adj_all_neg[j],2) for j=1:2]
+neg_adj = [(neg[i]*neg[i]')/(2*tot_neg[i]) for i=1:2]
+
+#We are basically just going to be evaluating the contribution of a pair of nodes to the network, so may as well
+#compute the whole thing before hand
+AdjMat = [Adj_pos[i]-Adj_neg[i]-pos_adj[i]+neg_adj[i] for i=1:2]
 
 spins = [Initialize(nGene[i]) for i=1:2]
 
 for iter=1:10000
     success = 0
     for e=1:epochs
-        passed = move()
+        @time passed = move()
         success = success+passed
     end
     println(success/epochs)
