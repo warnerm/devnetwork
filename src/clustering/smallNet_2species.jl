@@ -58,37 +58,27 @@ end
 
 #calculate the energy for a given node/spin, given the rest of the network as is
 function calcPartial(node,indiv_spin,net)
-    @eval @everywhere i = $node
-    @eval @everywhere n = $net
     sameMod = [j for j in  1:nGene[net] if spins[net][j] == indiv_spin]
     if length(sameMod) > 0
         energy_all = sum([AdjMat[net][node,j] for j in sameMod])
     else
         energy_all = 0
     end
-    #Add energy if orthologs are in the same module
     if haskey(dict[net],node)
         OGG = dict[net][node]
         partners = dict_ogg[3-net][OGG]
-        numSame = 0
-        for i=1:length(partners)
-            if partners[i] != 0 && partners[i] <= nGene[3-net]
-                if spins[3-net][partners[i]] == indiv_spin
-                    numSame = numSame + 1
-                end
+        partners = [p for p in partners if p <= nGene[3-net]]
+        sameMod_OGG = [j for j in partners if spins[3-net][j]==indiv_spin]
+        if length(sameMod_OGG) > 0
+            if net == 1
+                energy_all = sum([AdjMatOGG[node,j] for j in sameMod_OGG])
+            else
+                energy_all = sum([AdjMatOGG[j,node] for j in sameMod_OGG])
             end
         end
-        energy_all = energy_all + coupling_constant*weights[OGG]*numSame
     end
     return -energy_all
 end
-#
-# @everywhere begin
-#     #Objective function to test energy with respect to given node
-#     function nodeEnergy(j)
-#         return (Adj_all_pos[n][i,j]-Adj_all_neg[n][i,j] - posA[n][i,j] + negA[n][i,j])
-#     end
-# end
 
 function move()
     net = rand(1:2)
@@ -149,6 +139,24 @@ function diagMat(M)
     return newMat
 end
 
+function OGGmat(dict,dict_ogg,weights)
+    matO = zeros(nGene[1],nGene[2])
+    for i=1:nGene[1]
+        if haskey(dict[1],i)
+            OGG = dict[1][i]
+            partners = dict_ogg[2][OGG]
+            if length(partners) > 0
+                for j in partners
+                    if j <= nGene[2]
+                        matO[i,j] = weights[OGG]
+                    end
+                end
+            end
+        end
+    end
+    return matO
+end
+
 temp = .05
 epochs = 10
 max_mods = 250
@@ -172,6 +180,7 @@ Adj2neg = getAdj(neg2,nGene2)
 
 #Load orthology, make a dictionary
 dict,dict_ogg,weights = genDictionary(OGGmap)
+AdjMatOGG = OGGmat(dict,dict_ogg,weights)
 
 nGene = [nGene1,nGene2]
 Adj_pos = [diagMat(M) for M in [Adj1pos,Adj2pos]]
