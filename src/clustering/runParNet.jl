@@ -7,7 +7,7 @@ input2 = ARGS[2]
 OGGmap = ARGS[3]
 @eval @everywhere output1 = $ARGS[4]
 @eval @everywhere output2 = $ARGS[5]
-boots = ARGS[7]
+boots = parse(Int,ARGS[7])
 #
 # #
 # input2 = "../../../../Data/devnetwork/beeSmall"
