@@ -54,9 +54,8 @@ for f=1:nFile
 end
 
 Adj_sparse1 = [[1,1,i,j,Adj[1][i,j]/nFile] for i=1:nGene[1],j=1:nGene[2] if Adj[1][i,j] != 0 && i!=j]
-Adj_sparse2 = [[1,2,i,j,Adj[2][i,j]/nFile] for i=1:nGene[1],j=1:nGene[2] if Adj[2][i,j] != 0 && i!=j]
-Adj_sparse3 = [[2,2,i,j,Adj[3][i,j]/nFile] for i=1:nGene[2],j=1:nGene[2] if Adj[3][i,j] != 0 && i!=j]
+Adj_sparse2 = [[1,2,i,j+nGene[1],Adj[2][i,j]/nFile] for i=1:nGene[1],j=1:nGene[2] if Adj[2][i,j] != 0 && i!=j]
+Adj_sparse3 = [[2,2,i+nGene[1],j+nGene[1],Adj[3][i,j]/nFile] for i=1:nGene[2],j=1:nGene[2] if Adj[3][i,j] != 0 && i!=j]
+Adj_sparse = [Adj_sparse1;Adj_sparse2;Adj_sparse3]
 
-writedlm(string(prefix1,"_collectedRes.txt"),Adj_sparse1)
-writedlm(string(prefix1,"_cross_collectedRes.txt"),Adj_sparse2)
-writedlm(string(prefix2,"_collectedRes.txt"),Adj_sparse3)
+writedlm(string(prefix1,"_all_collectedRes.txt"),Adj_sparse)
