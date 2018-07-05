@@ -14,7 +14,6 @@ open(outPos,"w") do out
 end
 
 open(inputfile) do f
-    counter = 0
     for line in eachline(f)
         sp = split(line,"\t")
         a1 = parse(Int,sp[1])+1

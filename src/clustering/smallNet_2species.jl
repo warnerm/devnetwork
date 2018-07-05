@@ -32,9 +32,9 @@ end
 #Intialize spins with random modules
 begin
     @everywhere function Initialize(nGene)
-        spin = Vector{UInt8}(nGene)
+        spin = Vector{Int}(nGene)
         for i=1:nGene
-            spin[i] = convert(UInt8,rand(1:max_mods))
+            spin[i] = rand(1:max_mods)
         end
         return spin
     end
@@ -70,7 +70,7 @@ begin
         node = rand(1:nGene[net])
         edit_spin = copy(spins[net][node])
         while edit_spin == spins[net][node]
-            edit_spin = convert(UInt8,rand(1:max_mods))
+            edit_spin = rand(1:max_mods)
         end
         oldEnergy = calcPartial(spins,node,spins[net][node],net)
         newEnergy = calcPartial(spins,node,edit_spin,net)
@@ -143,28 +143,27 @@ function OGGmat(dict,dict_ogg,weights)
     return matO
 end
 
-begin
-    @everywhere function runSim(run)
-        srand()
-        spins = [Initialize(nGene[i]) for i=1:2]
-        temp = initial_temp
-        while true
-            success = 0
-            for e=1:epochs
-                passed = move(spins,temp)
-                success = success+passed
-            end
-            println(success/epochs)
-            if success/epochs < 0.01 #Stop iterations if there are very few successes
-                break
-            end
-            temp = temp*0.9
+@everywhere function runSim(run)
+    srand()
+    spins = [Initialize(nGene[i]) for i=1:2]
+    temp = initial_temp
+    while true
+        success = 0
+        for e=1:epochs
+            passed = move(spins,temp)
+            success = success+passed
         end
-
-        sOut1 = [1:nGene[1] spins[1]]
-        sOut2 = [1:nGene[2] spins[2]]
-
-        writedlm(string(output1,"Net_",run,".txt"),sOut1)
-        writedlm(string(output2,"Net_",run,".txt"),sOut2)
+        println(success/epochs)
+        if success/epochs < 0.01 #Stop iterations if there are very few successes
+            break
+        end
+        temp = temp*0.9
     end
+
+    sOut1 = [1:nGene[1] spins[1]]
+    sOut2 = [1:nGene[2] spins[2]]
+
+    writedlm(string(output1,"Net_",run,".txt"),sOut1)
+    writedlm(string(output2,"Net_",run,".txt"),sOut2)
+    return 0
 end

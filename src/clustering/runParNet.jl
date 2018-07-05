@@ -25,8 +25,8 @@ pos2 = string(input2,"pos.txt")
 neg2 = string(input2,"neg.txt")
 
 
-@everywhere initial_temp = 1
-@everywhere epochs = 1000
+@everywhere initial_temp = 1 #0.8 appears to be the right place to start when not considering orthologs
+@everywhere epochs = 50000000 #taking ~4 hours on a single core with initial_temp = 0.8
 @everywhere max_mods = 250
 @everywhere coupling_constant = 3
 @everywhere cooling_constant = 0.9
@@ -54,11 +54,11 @@ AdjO = OGGmat(dict1,dict_ogg1,weights)
 Adj_pos = [diagMat(M) for M in [Adj1pos,Adj2pos]]
 Adj_neg = [diagMat(M) for M in [Adj1neg,Adj2neg]]
 
-tot_pos = [sum(Adj_pos[j]) for j=1:2]
+tot_pos = [sum(Adj_pos[j])/2 for j=1:2]
 pos = [sum(Adj_pos[j],2) for j=1:2]
 pos_adj = [(pos[i]*pos[i]')/(2*tot_pos[i]) for i=1:2]
 
-tot_neg = [sum(Adj_neg[j]) for j=1:2]
+tot_neg = [sum(Adj_neg[j])/2 for j=1:2]
 neg = [sum(Adj_neg[j],2) for j=1:2]
 neg_adj = [(neg[i]*neg[i]')/(2*tot_neg[i]) for i=1:2]
 
@@ -74,5 +74,7 @@ for n=1:2
 end
 
 @eval @everywhere AdjMat = $AdjMat2
+
+println("starting simulations for $boots times")
 
 pmap((args)->runSim(args...),[rn for rn=1:boots])
