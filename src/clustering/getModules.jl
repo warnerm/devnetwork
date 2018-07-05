@@ -5,6 +5,8 @@ outputfile = ARGS[2]
 
 f = open(readdlm,inputfile)
 genes_remaining = collect(1:Int(maximum(f[:,3:4]))) #make list of all genes
+
+f = f[f[:,5] >= 0.8,:]
 mod = 0
 ModDef = Vector{Int}(length(genes_remaining))
 
@@ -17,8 +19,8 @@ while length(genes_remaining) > 0
     found = 0
     while true
         ModDef[new_gene] = mod
-        conns = [Int(f[row,4]) for row in 1:size(f,1) if f[row,3] == new_gene && f[row,5] >= 0.95]
-        conns2 = [Int(f[row,3]) for row in 1:size(f,1) if f[row,4] == new_gene && f[row,5] >= 0.95]
+        conns = [Int(f[row,4]) for row in 1:size(f,1) if f[row,3] == new_gene]
+        conns2 = [Int(f[row,3]) for row in 1:size(f,1) if f[row,4] == new_gene]
         append!(conns,conns2)
         if length(conns) > 0
             append!(next_genes,conns)
