@@ -55,9 +55,9 @@ end
         sameMod_OGG = [j for j in partners if spins[3-net][j]==indiv_spin]
         if length(sameMod_OGG) > 0
             if net == 1
-                energy_all = sum([AdjMatOGG[node,j] for j in sameMod_OGG])
+                energy_all = energy_all+sum([AdjMatOGG[node,j] for j in sameMod_OGG])
             else
-                energy_all = sum([AdjMatOGG[j,node] for j in sameMod_OGG])
+                energy_all = energy_all+sum([AdjMatOGG[j,node] for j in sameMod_OGG])
             end
         end
     end
