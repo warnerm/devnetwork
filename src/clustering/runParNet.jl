@@ -15,7 +15,7 @@ boots = parse(Int,ARGS[7])
 # OGGmap = "../../../../Data/devnetwork/OGGmap.txt"
 # @everywhere output1 = "../../../../Data/devnetwork/antTest"
 # @everywhere output2 = "../../../../Data/devnetwork/beeTest"
-@everywhere include("smallNet_2species.jl")
+# @everywhere include("smallNet_2species.jl")
 
 #boots=3
 
@@ -26,7 +26,8 @@ neg2 = string(input2,"neg.txt")
 
 
 @everywhere initial_temp = 1 #0.8 appears to be the right place to start when not considering orthologs
-@everywhere epochs = 50000000 #taking ~4 hours on a single core with initial_temp = 0.8
+#@everywhere epochs = 50000000 #running full simulations with this
+@everywhere epochs = 20 #running full simulations with this
 @everywhere max_mods = 250
 @everywhere coupling_constant = 3
 @everywhere cooling_constant = 0.9
