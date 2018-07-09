@@ -50,18 +50,22 @@ aculeata = c("Aculeata","Apocrita")
 bee_name = c("Apoidea", "Apidae", "Apinae","Apini")
 Aps$psName[Aps$psName %in% ant_name] = "ant"
 Aps$psName[Aps$psName %in% old] = "old"
-Aps$psName[Aps$psName %in% insect_arthropod] = "insect_arthropod"
+Aps$psName[Aps$psName %in% insect_arthropod] = "insect"
 Aps$psName[Aps$psName %in% aculeata] = "aculeata"
 Aps$psName[Aps$psName=="Monomorium"] = "novel"
+Aps$psName = factor(Aps$psName,levels = c("old","insect","Hymenoptera","aculeata","ant","novel"))
+levels(Aps$psName)[3] = "hymenoptera"
 
 Btax = "cellular organisms; Eukaryota; Opisthokonta; Metazoa; Eumetazoa; Bilateria; Protostomia; Ecdysozoa; Panarthropoda; Arthropoda; Mandibulata; Pancrustacea; Hexapoda; Insecta; Dicondylia; Pterygota; Neoptera; Holometabola; Hymenoptera; Apocrita; Aculeata; Apoidea; Apidae; Apinae; Apini; Apis"
 Btax = strsplit(Btax,"; ")[[1]]
 Bps <- mergeRes2(7460,"Amel",Btax,"novel","Amel_7460_blastAll_ps")
 Bps$psName[Bps$psName %in% old] = "old"
-Bps$psName[Bps$psName %in% insect_arthropod] = "insect_arthropod"
+Bps$psName[Bps$psName %in% insect_arthropod] = "insect"
 Bps$psName[Bps$psName %in% aculeata] = "aculeata"
 Bps$psName[Bps$psName %in% bee_name] = "bee"
 Bps$psName[Bps$psName == "Apis"] = "novel"
+Bps$psName = factor(Bps$psName,levels = c("old","insect","Hymenoptera","aculeata","bee","novel"))
+levels(Bps$psName)[3] = "hymenoptera"
 
 AllPS = merge(Aps[!is.na(Aps$OGGacu),],Bps[!is.na(Bps$OGGacu),],by = "OGGacu")
 AllPS1 = AllPS[,c(1,4,8)]
@@ -71,6 +75,7 @@ AllPS_sum$psName = "old"
 AllPS_sum$psName[AllPS$ps > 8] = "insect"
 AllPS_sum$psName[AllPS$ps > 18] = "hymenoptera"
 AllPS_sum$psName[AllPS$ps > 20] = "aculeata"
+AllPS_sum$psName = factor(AllPS_sum$psName,levels = c("old","insect","hymenoptera","aculeata"))
 
 AmelEND = mergeEndo("Amel",7460)
 MpharEND = mergeEndo("Mphar",307658)
