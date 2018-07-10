@@ -96,5 +96,55 @@ AB11 = AB11[AB11$Gene.y %in% names(t),]
 ACUogg = AB11[,c(1,2,6)]
 colnames(ACUogg) = c("OGGacu","gene_Mphar","gene_Amel")
 
-save(ACUogg,ENDogg,Aps,Bps,AllPS_sum,file="~/GitHub/devnetwork/phylo_results/collectedPhylo.RData")
+#Identify developmental genes in Drosophila based on RNA-seq across development 
+counts <- read.csv("~/GitHub/devnetwork/data/counts_drosophila.csv")
+fpkm <- read.csv("~/GitHub/devnetwork/data/fpkm_drosophila.csv")
+
+factors <- read.csv("~/GitHub/devnetwork/data/drosophila_sra.csv")
+rownames(counts) = rownames(fpkm) = counts$gene_id
+counts = counts[,-c(1)]
+fpkm = fpkm[,-c(1)]
+
+keep = apply(fpkm,1,function(x) sum(x > 1) >= length(x)/2)
+counts = counts[keep,]
+
+factors$time_factor = as.factor(factors$time)
+
+#Sex-bias
+design <- model.matrix(~sex+time_factor,data=droplevels(f_sex[f_sex$time>25,]))
+d = counts[,colnames(counts) %in% f_sex$SRA[f_sex$time>25]]
+sexGenes <- EdgeR(d,design,2)
+sexGenes$Gene = rownames(sexGenes)
+sexGenes = merge(sexGenes,ENDogg,by.x="Gene",by.y="gene_Dmel")
+
+#adding Jasper data
+#Calculate tau (tissue specificity) for honey bee genes
+calculatetau <- function(factor,expr){
+  meanExpr <- lapply(levels(factor$tissue),function(x) 
+    rowSums(as.data.frame(expr[,colnames(expr) %in% factor$SRA[factor$tissue==x]]))/sum(factor$tissue==x))
+  meanExpr <- as.data.frame(do.call(cbind,meanExpr))
+  colnames(meanExpr) = levels(factor$tissue)
+  geneDeviation = apply(meanExpr,1,function(x){
+    sum(ldply(lapply(c(1:12),function(i) 1-x[i]/max(x))))
+  })
+  
+  tau = geneDeviation/(11)
+  
+  return(list(tau,meanExpr))
+}
+
+counts <- read.csv("~/GitHub/devnetwork/data/Jasper_counts.csv")
+fpkm <- read.csv("~/GitHub/devnetwork/data/Jasper_fpkm.csv")
+samples <- read.table("~/GitHub/devnetwork/data/samples_jasper.txt",head=T)
+rownames(counts) = counts$gene_id
+counts = counts[,-c(1)]
+rownames(fpkm) = fpkm$gene_id
+fpkm = fpkm[,-c(1)]
+
+samples = samples[samples$caste!="callow",]
+counts = counts[,colnames(counts) %in% samples$SRA]
+beeTissue <- calculatetau(samples,fpkm)
+tau <- data.frame(Gene=names(beeTissue[[1]]),tau=beeTissue[[1]])
+
+save(ACUogg,ENDogg,Aps,Bps,AllPS_sum,sexGenes,tau,file="~/GitHub/devnetwork/phylo_results/collectedPhylo.RData")
 

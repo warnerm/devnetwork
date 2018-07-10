@@ -457,23 +457,6 @@ pcFC <- function(res,ps,pLev){
   return(p)
 }
 
-pcFC_abd <- function(res,ps,pLev){
-  ps = ps[!is.na(ps$psName),]
-  resM = melt(res,id.vars = "Gene")
-  resM = resM[!is.na(resM$value),]
-  resM = merge(ps,resM,by="Gene")
-  resM$psName = factor(resM$psName,levels = pLev)
-  p <- ggplot(resM[resM$variable=="abdomen",],aes(x = psName,y=value))+
-    geom_boxplot(outlier.shape=NA,notch = TRUE)+
-    main_theme+
-    geom_hline(yintercept = 0,color="black")+
-    ylab("logFC (worker/queen)")+
-    xlab("stage")
-  return(p)
-}
-
-antCB = euclDist(antRes_allstage[[1]])
-beeCB = euclDist(beeRes_allstage[[1]])
 
 antPS = merge(antRes[[1]],Aps,by="Gene")
 antPS = merge(antPS,antCB,by="Gene")
