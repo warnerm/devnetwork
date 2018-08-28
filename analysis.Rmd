@@ -365,7 +365,7 @@ biasPlot <- function(d1,d2,spec){
 p1 = biasPlot(AsexRes[[3]][[1]],AcasteRes[[3]][[1]],"gene_Mphar")+
   ylab("ant caste bias (queen/worker)")+
   xlab("ant sex bias (queen/male)")
-p2 = biasPlot(BsexRes[[3]][[1]],BcasteRes[[3]][[1]],"gene_Mphar")+
+p2 = biasPlot(BsexRes[[3]][[1]],BcasteRes[[3]][[1]],"gene_Amel")+
   ylab("bee caste bias (queen/worker)")+
   xlab("bee sex bias (queen/male)")
 grid.arrange(p1,p2,nrow=1)
@@ -512,24 +512,24 @@ p
 
 ## -log(P-value) for genes with conserved abdominal differential expression
 ```{r develIndex}
-#DE results
-# antDevel2$Gene=rownames(antDevel2)
-# aD = merge(ogg11,antDevel2,by.x="gene_Mphar",by.y="Gene")
-# 
-# p1 <- ggplot(aD[!grepl("ant",aD$abdDE),],aes(x = abdDE,y=-log(FDR)))+
-#   geom_boxplot(notch = T)+
-#   scale_y_log10()+
-#   ggtitle("devel measured in ant")
-# 
-# beeDevel2$Gene=rownames(beeDevel2)
-# bD = merge(ogg11,beeDevel2,by.x="gene_Amel",by.y="Gene")
-# 
-# p2 <- ggplot(bD[!grepl("ant",bD$abdDE),],aes(x = abdDE,y=-log(FDR)))+
-#   geom_boxplot(notch = T)+
-#   scale_y_log10()+
-#   ggtitle("devel measured in bee")
-# 
-# grid.arrange(p1,p2,nrow=1)
+#using DE results
+antDevel2$Gene=rownames(antDevel2)
+aD = merge(ogg11,antDevel2,by.x="gene_Mphar",by.y="Gene")
+
+p1 <- ggplot(aD[!grepl("ant",aD$abdDE),],aes(x = abdDE,y=-log(FDR)))+
+  geom_boxplot(notch = T)+
+  scale_y_log10()+
+  ggtitle("devel measured in ant")
+
+beeDevel2$Gene=rownames(beeDevel2)
+bD = merge(ogg11,beeDevel2,by.x="gene_Amel",by.y="Gene")
+
+p2 <- ggplot(bD[!grepl("ant",bD$abdDE),],aes(x = abdDE,y=-log(FDR)))+
+  geom_boxplot(notch = T)+
+  scale_y_log10()+
+  ggtitle("devel measured in bee")
+
+grid.arrange(p1,p2,nrow=1)
 ```
 
 
