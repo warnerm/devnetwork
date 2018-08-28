@@ -27,7 +27,7 @@ calculatetauSoc <- function(factor,expr){
 antTau = calculatetauSoc(factorA,antT[rowSums(antT) > 0,])
 beeTau = calculatetauSoc(factorB,beeT[rowSums(beeT) > 0,])
 
-save(beeTau,antTau,file = "../out/tau_results.RData")
+save(beeTau,antTau,file = "../results/tau_results.RData")
 
 # 
 # TGmap <- read.table("../phylostratigraphy/out/TGmap_Amel.txt")
