@@ -1,0 +1,86 @@
+TEST_SPEC = ["Amel","Mphar"]
+TAX_ID = ["7460","307658"]
+
+REFGENOMES, = glob_wildcards("../data/extraRef/{ref}.fa")
+
+THREADS = 8
+
+rule all:
+	input: expand("../out/{test}_{ref}_blastAll_ps",zip,test=TEST_SPEC,ref=TAX_ID),"../out/collectedPhylo.RData"
+
+rule getGenes:
+	input: "../data/{test}_prot.fa"
+	output: "../temp/{test}_allProt"
+	shell: """grep ">" {input} | tr -d ">" > {output}"""
+
+#Perform genome-wide pairwise blast
+rule pairwiseBlast:
+	input: ref="../temp/{ref}.phr",test="../data/{test}_prot.fa"
+	output: "../out/{ref}_{test}_blastRes.tab"
+	shell: "module load python/anaconda/2.7; python pairwiseBlast.py -s {input[test]} -d {input[ref]} -t {THREADS} -o {output}"
+
+#Edit header on all hymenoptera fasta files
+rule editHeader:
+	input: "../data/extraRef/{ref}.fa"
+	output: "../temp/{ref}_edit.fa"
+	shell: "sed 's/>/>{wildcards.ref}_/' {input} | sed 's/ .*//' > {output}"
+
+#Combine all hymenoptera fasta, make blast DB
+rule combineFasta:
+	input: expand("../temp/{ref}_edit.fa",ref=REFGENOMES)
+	output: "../temp/allRef.fa","../temp/allRef.phr"
+	shell: "cat ../temp/*_edit.fa > {output[0]}; makeblastdb -in {output[0]} -dbtype prot -out ../temp/allRef"
+
+#Build taxonomy database for all hymenopterans
+rule taxDB_hym:
+	input: expand("../temp/{ref}_edit.fa",ref=REFGENOMES)
+	output: "../data/taxonomy_extra.db"
+	shell: """module load python/anaconda/2.7; ls ../temp/*_edit.fa | sed 's/.*\///' > ../temp/spec_list; \
+			python makeTaxDB_extra.py ../temp/spec_list"""
+
+#Blast transcripts against database of hymenopteran proteins and call phylostrata
+rule blastAll:
+	input: genes="../temp/{test}_allProt",tax="../data/taxonomy_extra.db",db="../temp/allRef.phr",prot="../data/{test}_prot.fa"
+	output: "../out/{test}_{ref}_blastAll_ps"
+	shell: "module load python/anaconda/2.7; python getPS_blastAll.py {input[genes]} {output} {THREADS} {input[db]} {input[prot]} {wildcards.ref}"
+
+#Get transcript-to-gene maps
+rule transcriptGeneMap:
+	input: "../data/{test}.gff"
+	output: "../out/TGmap_{test}.txt"
+	shell: """grep "protein_id" {input} | grep "gene=" | sed 's/.*gene=//' | sed 's/;.*protein_id=/\t/' | sed 's/;.*//' | sort | uniq > {output}"""
+
+#Get Endopterygota OGGs. "EOG090R" is the prefix for all endopterygota genes
+rule endOGG:
+	input: geneList="../out/{ref}_{test}_blastRes.tab", oggList="../temp/{ref}.tab"
+	output: "../out/{test}_{ref}_END"
+	shell: "module load python/anaconda/2.7; sed 's/gnl.* //' {input[geneList]} | awk {{'print$2'}} | sort | uniq > ../temp/geneEdit; python2.7 getOGG.py ../temp/geneEdit {output} {THREADS} {input[oggList]} EOG090R"
+
+#Get Aculeata OGGs. "EOG090R" is the prefix for all endopterygota genes
+rule endOGG:
+	input: geneList="../out/{ref}_{test}_blastRes.tab", oggList="../temp/{ref}.tab"
+	output: "../out/{test}_{ref}_END"
+	shell: "module load python/anaconda/2.7; sed 's/gnl.* //' {input[geneList]} | awk {{'print$2'}} | sort | uniq > ../temp/geneEdit; python2.7 getOGG.py ../temp/geneEdit {output} {THREADS} {input[oggList]} EOG090R"
+
+
+#Get Aculeata OGGs. "EOG090R" is the prefix for all endopterygota genes
+rule acuOGG:
+	input: geneList="../out/{ref}_{test}_blastRes.tab", oggList="../temp/{ref}.tab"
+	output: "../out/{test}_{ref}_ACU"
+	shell: "module load python/anaconda/2.7; sed 's/gnl.* //' {input[geneList]} | awk {{'print$2'}} | sort | uniq > ../temp/geneEdit; python2.7 getOGG.py ../temp/geneEdit {output} {THREADS} {input[oggList]} EOG091C"
+
+#Collect ps results for downstream analysis
+rule collectPS:
+	input: rules.acuOGG.output, rules.endOGG.output, rules.transcriptGeneMap.output, rules.blastAll.output
+	output: "../out/collectedPhylo.RData"
+	shell: "Rscript collectPS.R"
+
+
+
+
+
+
+
+
+
+
