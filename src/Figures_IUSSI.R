@@ -2066,7 +2066,7 @@ ggplot(b,aes(x=abdomen,y=f))+
   geom_boxplot(notch=T)
 
 DmelSC = merge(sexGenes,ogg11,by="gene_Amel")
-key <- read.table("~/Writing/Data/NurseSpecialization_transcriptomicData/DmelKey.txt") #Generated from Drosophila melanogaster gff file
+key <- read.table("~/GitHub/devnetwork/data/DmelKey.txt") #Generated from Drosophila melanogaster gff file
 key2 <- read.table("~/GitHub/devnetwork/data/Dmel_CDStoGene_key.txt")
 devel <- read.table("~/Downloads/Devel_IDs.txt")
 sex <- read.table("~/Downloads/Sex_IDs.txt")

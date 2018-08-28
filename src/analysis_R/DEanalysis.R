@@ -275,6 +275,7 @@ beeSocRes <- parseDE(beeSocial,"forager","nurse",0.1)
 antDevel <- genDevTool(0.1,factorA,ant)
 beeDevel <- genDevTool(0.1,factorB,bee)
 
+#Remove pupae (was including them previously)
 DevTool2 <- function(factor,data){
   f = factor[factor$stage != 8 &factor$stage!=7,]
   design <- model.matrix(~stage+colony+caste,data=droplevels(f))
