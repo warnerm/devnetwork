@@ -465,7 +465,7 @@ grid.arrange(p2,p4,nrow=1)
 ##Caste/Behavior bias vs phylostrata
 ```{r cbPsPlots,fig.height=6,fig.width=12}
 phPlot <- function(data,type,spec){
-  pA <- ggplot(data[data$type==type,],aes(x = psName,y=cb,fill=psName))+
+  pA <- ggplot(data[data$type==type & !is.na(data$psName),],aes(x = psName,y=cb,fill=psName))+
   geom_boxplot(notch=TRUE,outlier.shape=NA)+
   plot2theme+
   ggtitle(spec)+
@@ -521,6 +521,7 @@ aD = merge(ogg11,antDevel2,by.x="gene_Mphar",by.y="Gene")
 p1 <- ggplot(aD[!grepl("ant",aD$abdDE),],aes(x = abdDE,y=-log(FDR)))+
   geom_boxplot(notch = T)+
   scale_y_log10()+
+  theme(axis.text.x = element_text(angle=90))+
   ggtitle("devel measured in ant")
 
 beeDevel2$Gene=rownames(beeDevel2)
@@ -529,6 +530,7 @@ bD = merge(ogg11,beeDevel2,by.x="gene_Amel",by.y="Gene")
 p2 <- ggplot(bD[!grepl("ant",bD$abdDE),],aes(x = abdDE,y=-log(FDR)))+
   geom_boxplot(notch = T)+
   scale_y_log10()+
+  theme(axis.text.x = element_text(angle=90))+
   ggtitle("devel measured in bee")
 
 grid.arrange(p1,p2,nrow=1)
