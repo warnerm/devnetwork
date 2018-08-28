@@ -13,8 +13,8 @@ modifyDF <- function(data){
   return(data[!grepl("ERCC",rownames(data)),-c(1)])
 }
 
-beeT <- read.table("../data/bees.tpm.txt",header=TRUE)
-antT <- read.table("../data/ants.tpm.txt",header=TRUE)
+beeT <- read.table("data/bees.tpm.txt",header=TRUE)
+antT <- read.table("data/ants.tpm.txt",header=TRUE)
 beeT <- modifyDF(beeT)
 antT <- modifyDF(antT)
 antT = antT[rowSums(antT) > 0,]
@@ -37,4 +37,4 @@ sjob <- slurm_apply(plaid, runs, jobname = 'plaid',
 beePl <- get_slurm_out(sjob,outtype='raw') #get output as lists
 
 
-save(antPl,beePl,file="PlaidResults.RData")
+save(antPl,beePl,file="results/PlaidResults.RData")

@@ -233,8 +233,8 @@ genDevTool <- function(fdr,factors,data){
 ############
 ##Loading in, cleaning data
 ###########
-bee <- read.table("~/GitHub/devnetwork/data/bees.counts_edit.txt",header=TRUE)
-ant <- read.table("~/GitHub/devnetwork/data/ants.counts_edit.txt",header=TRUE)
+bee <- read.table("data/bees.counts_edit.txt",header=TRUE)
+ant <- read.table("data/ants.counts_edit.txt",header=TRUE)
 bee = modifyDF(bee)
 ant = modifyDF(ant)
 
@@ -285,4 +285,4 @@ DevTool2 <- function(factor,data){
 antDevel2 = DevTool2(factorA,ant)
 beeDevel2 = DevTool2(factorB,bee)
 
-save(antDevel2,beeDevel2,beeTests,beeTests_oneLarv,antRes,beeRes,antRes_allstage,beeRes_allstage,antSocRes,beeSocRes,antTests,antTests_oneLarv,ant_sexDE,bee_sexDE,ant_VM,bee_VM,beeSocial,antSocial,antDevel,beeDevel,file = "~/GitHub/devnetwork/data/DEtests.RData")
+save(antDevel2,beeDevel2,beeTests,beeTests_oneLarv,antRes,beeRes,antRes_allstage,beeRes_allstage,antSocRes,beeSocRes,antTests,antTests_oneLarv,ant_sexDE,bee_sexDE,ant_VM,bee_VM,beeSocial,antSocial,antDevel,beeDevel,file = "results/DEtests.RData")

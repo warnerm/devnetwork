@@ -14,7 +14,7 @@ EdgeR <- function(data,design,coef){
 }
 
 #Load in endopterygota definitions
-load("../phylostratigraphy/out/collectedPhylo.RData")
+load("../results/collectedPhylo.RData")
 
 #Identify sex-associated genes in Drosophila based on RNA-seq data
 counts <- read.csv("../data/counts_drosophila.csv")

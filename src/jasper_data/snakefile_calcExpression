@@ -3,7 +3,7 @@ GFF = "ref/GCF_000002195.4_Amel_4.5_genomic.gff" #After removing everything afte
 
 SAMPLES, = glob_wildcards("fastq/{sample}_pass_1.fastq")
 
-THREADS = 80
+THREADS = 10
 
 
 rule all:
@@ -32,5 +32,3 @@ rule collectRsem:
 	output: "out/counts.csv.gz", "out/fpkm.csv.gz"
 	shell: "python2.7 collect_counts.py genes rsem/ | gzip > {output[0]}; \
 	python2.7 collect_fpkm.py genes rsem/ | gzip > {output[1]}"
-
-grep "exon" GCA_000611955.2_Stegodyphus_mimosarum_v1_genomic.gff | grep "gene=" > ref/exon.gff
