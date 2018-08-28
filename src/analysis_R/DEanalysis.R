@@ -13,18 +13,6 @@ library(viridis)
 library(ggmosaic)
 library(lemon)
 
-main_theme=theme_bw()+
-  theme(panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        panel.border = element_rect(size = 1, color = "black",fill = NA),
-        text=element_text(family='Arial'),
-        axis.text = element_text(size=16),
-        axis.title = element_text(size = 22,face="bold"),
-        plot.title = element_text(hjust = 0.5,size=25,face = "bold"),
-        legend.text = element_text(size=16),
-        legend.title = element_text(size = 22))
-
 #Constants
 FDR = 0.05
 tissues <- c("head","gaster","mesosoma")
@@ -53,11 +41,19 @@ checkOverlap <- function(dat){
 }
 
 #filter out based on counts per million reads
-filterLowly <- function(counts,cut){ 
+filterLowly <- function(counts,cut,factor){ 
+  factor$stc = as.factor(apply(factor[,c(2,3,5)],1,paste,collapse="_"))
   libs = colSums(counts)/1000000
   cpm = counts/libs
-  keep = rowSums(cpm > 1) >= ncol(counts)/2
-  return(counts[keep,])
+  keep = rowSums(cpm > 1) >= (ncol(counts)/2)
+  keep2 <- lapply(levels(factor$stc),function(x){
+    apply(counts[,colnames(counts) %in% factor$sample[factor$stc==x]],1,function(y){
+      sum(y > 1)/length(y)
+    })
+  })
+  keepA = do.call(cbind,keep2)
+  keepA2 = apply(keepA,1,function(x) sum(x == 1) > 0)
+  return(counts[keep|keepA2,])
 }
 
 #generate factors df based on counts fie
@@ -190,7 +186,7 @@ ovaryDE <- function(d,f){
 
 
 #Parse social results
-parseDE <- function(tests,name1,name2){
+parseDE <- function(tests,name1,name2,FDR){
   tests <- lapply(tests,function(x) cbind(x,Gene=rownames(x)))
   all_test <- Reduce(function(x,y) {merge(x,y,by="Gene")},tests)
   all_test2 <- all_test[,c(1,seq(2,(5*length(tests) + 1),by=5))]
@@ -199,13 +195,38 @@ parseDE <- function(tests,name1,name2){
   DEtest = all_test2
   DEres <- do.call(cbind,(lapply(1:length(tests),function(j){
     apply(all_test2,1,function(x){
-      if (tests[[j]]$FDR[tests[[j]]$Gene==x[1]] < 0.1 & tests[[j]]$logFC[tests[[j]]$Gene==x[1]] > 0 ) name1
-      else if (tests[[j]]$FDR[tests[[j]]$Gene==x[1]] < 0.1 & tests[[j]]$logFC[tests[[j]]$Gene==x[1]] < 0 ) name2
+      if (tests[[j]]$FDR[tests[[j]]$Gene==x[1]] < FDR & tests[[j]]$logFC[tests[[j]]$Gene==x[1]] > 0 ) name1
+      else if (tests[[j]]$FDR[tests[[j]]$Gene==x[1]] < FDR & tests[[j]]$logFC[tests[[j]]$Gene==x[1]] < 0 ) name2
       else "nonDE"
     })
   })))
   DEtest[,c(2:ncol(all_test2))] = DEres
   return(list(all_test2,DEtest,all_test3))
+}
+
+#Identify genes DE across development for the given subset of samples
+casteDev <- function(fdr,caste,data,factors){
+  counts <- data[,(factors$tissue=="larva"|factors$tissue=="egg") & factors$caste==caste]
+  f = droplevels(factors[factors$sample %in% colnames(counts),])
+  design <- model.matrix(~stage+colony,data=f)
+  out <- EdgeR(counts,design,2:length(levels(f$stage)))
+  return(rownames(out)[out$FDR < fdr])
+}
+
+
+#Generate developmental toolkit: genes DE across develoment in queens and workers
+genDevTool <- function(fdr,factors,data){
+  fQueen <- factors[factors$stage==1|factors$stage==2,]
+  fQueen$caste="queen"
+  fQueen$sample=paste(fQueen$sample,"_QueenCopy",sep="")
+  rownames(fQueen)=fQueen$sample
+  factors <- rbind(factors,fQueen) #Add copies of egg and L1 samples for dev toolkit definition
+  dataQ <- data[,grepl("L1|_E",colnames(data))]
+  colnames(dataQ)=paste(colnames(dataQ),"_QueenCopy",sep="")
+  data <- cbind(data,dataQ)#Add copies of egg and L1 samples for dev toolkit definition
+  QGenes <- casteDev(fdr,"queen",data,factors)
+  WGenes <- casteDev(fdr,"worker",data,factors)
+  return(QGenes[QGenes %in% WGenes]) #return genes that are differentially expressed across stages in queens and workers
 }
 
 
@@ -217,13 +238,13 @@ ant <- read.table("~/GitHub/devnetwork/data/ants.counts_edit.txt",header=TRUE)
 bee = modifyDF(bee)
 ant = modifyDF(ant)
 
-#Filter out lowly expressed genes
-ant <- filterLowly(ant,1)
-bee <- filterLowly(bee,1)
-
 #Make factors
 factorA <- genFactor(ant)
 factorB <- genFactor(bee)
+
+#Filter out lowly expressed genes
+ant <- filterLowly(ant,1,factorA)
+bee <- filterLowly(bee,1,factorB)
 
 ########
 ##Identify differentially expressed genes
@@ -241,13 +262,17 @@ antSocial <- speciesSocial(ant,factorA)
 
 #Extract logFC, FDR from DE results
 names(antTests_oneLarv) = names(beeTests_oneLarv) = c("larva","pupa","head","thorax","abdomen")
-antRes <- parseDE(antTests_oneLarv,"worker","queen")
-beeRes <- parseDE(beeTests_oneLarv,"worker","queen")
-antRes_allstage <- parseDE(antTests,"worker","queen")
-beeRes_allstage <- parseDE(beeTests,"worker","queen")
+antRes <- parseDE(antTests_oneLarv,"worker","queen",0.1)
+beeRes <- parseDE(beeTests_oneLarv,"worker","queen",0.1)
+antRes_allstage <- parseDE(antTests,"worker","queen",0.1)
+beeRes_allstage <- parseDE(beeTests,"worker","queen",0.1)
 
 #Get social results
-antSocRes <- parseDE(antSocial,"forager","nurse")
-beeSocRes <- parseDE(beeSocial,"forager","nurse")
+antSocRes <- parseDE(antSocial,"forager","nurse",0.1)
+beeSocRes <- parseDE(beeSocial,"forager","nurse",0.1)
 
-save(beeTests,beeTests_oneLarv,antRes,beeRes,antRes_allstage,beeRes_allstage,antSocRes,beeSocRes,antTests,antTests_oneLarv,ant_sexDE,bee_sexDE,ant_VM,bee_VM,beeSocial,antSocial,file = "~/GitHub/devnetwork/data/DEtests.RData")
+#Get lists of developmental genes (DE across development in queens and workers)
+antDevel <- genDevTool(0.1,factorA,ant)
+beeDevel <- genDevTool(0.1,factorB,bee)
+
+save(beeTests,beeTests_oneLarv,antRes,beeRes,antRes_allstage,beeRes_allstage,antSocRes,beeSocRes,antTests,antTests_oneLarv,ant_sexDE,bee_sexDE,ant_VM,bee_VM,beeSocial,antSocial,antDevel,beeDevel,file = "~/GitHub/devnetwork/data/DEtests.RData")

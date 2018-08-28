@@ -55,12 +55,10 @@ end
         sameMod_OGG = [j for j in partners if spins[3-net][j]==indiv_spin]
         if length(sameMod_OGG) > 0
             if net == 1
-                println("found, initial energy is $energy_all")
                 energy_all = energy_all+sum([AdjMatOGG[node,j] for j in sameMod_OGG])
             else
                 energy_all = energy_all+sum([AdjMatOGG[j,node] for j in sameMod_OGG])
             end
-            println("found, final energy is $energy_all")
         end
     end
     return -energy_all
@@ -131,10 +129,8 @@ function OGGmat(dict,dict_ogg,weights)
     matO = zeros(nGene[1],nGene[2])
     found = 0
     for i=1:nGene[1]
-        println(i)
         if haskey(dict[1],i)
             OGG = dict[1][i]
-            println(OGG)
             partners = dict_ogg[2][OGG]
             if length(partners) > 0
                 for j in partners

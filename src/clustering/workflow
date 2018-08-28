@@ -1,2 +1,5 @@
 singleNet.R #to get correlations of expression data. Python doesn't perform well on these large correlations for some reason
-IndivNet.py #Use output from singleNet.R to make single network graphs
+IndivNet_buildup.py #Use output from singleNet.R to make single network graphs
+julia findConnDirection.jl #Filter connections for positive vs negative
+Generate orthology map from ODB9 results (from phylostratigraphy stuff), converting genes to integers
+julia smallNet_2species.jl
