@@ -1,0 +1,48 @@
+#This script compiles all analysis necessary to make figures
+
+#rule all: 
+	
+#perform phylostratigraphy, get orthologs
+rule ps_calls:
+	output: "results/collectedPhylo.RData"
+	shell: """cd phylostratigraphy/src; snakemake -s snakefile_blastPS; cd ../../; \
+			mv phylostratigraphy/out/collectedPhylo.RData {output}"""
+
+#Perform DE analysis for each species
+rule DE_analysis:
+	input: "ants.counts_edit.txt","bees.counts_edit.txt"
+	output: "results/DEtests.RData"
+	shell" "Rscript src/analysis_R/DEanalysis.R"
+
+#Align Dmel data
+rule Dmel_align:
+	output: "data/counts_drosophila.csv","data/fpkm_drosophila.csv"
+	shell: "cd src/Drosophila_data; snakemake -s snakefile_calcExpression; \
+			gunzip out/*gz; mv out/counts.csv {output[0]}; mv out/fpkm.csv {output[1]}; cd ../../"
+
+#Call sex-biased genes in D. melanogaster
+rule Dmel_sexGenes:
+	input: "data/counts_drosophila.csv","results/DEtests.RData"
+	output: "results/dmel_sexGenes.csv"
+	shell: "cd src; Rscript Drosophila_data/dmel_sex.R; cd .."
+
+#Align Jasper honey bee data
+rule Apis_tissue_align:
+	output: "data/Jasper_counts.csv","data/Jasper_fpkm.csv"
+	shell: "cd src/jasper_data; snakemake -s snakefile_calcExpression; \
+			gunzip out/*gz; mv out/counts.csv {output[0]}; mv out/fpkm.csv {output[1]}; cd ../../"
+
+#Calculate tissue-specificity index from Jasper et al data
+rule Apis_calcTau:
+	input: "data/Jasper_fpkm.csv"
+	output: "results/tau_results.RData"
+	shell: "cd src; Rscript jasper_data/jasper_tissue.R; cd .."
+
+#Run plaid biclustering
+rule plaid:
+	input: "data/bees.tpm.txt","data/ants.tpm.txt"
+	output: "results/PlaidResults.RData"
+	shell: "Rscript src/analysis_R/plaid.R"
+
+
+
