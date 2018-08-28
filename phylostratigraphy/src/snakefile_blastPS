@@ -1,9 +1,12 @@
 TEST_SPEC = ["Amel","Mphar"]
+ALL_SPEC = ["Amel","Mphar","Dmel"]
+
 TAX_ID = ["7460","307658"]
+TAX_ID_ALL = ["7460","307658","7227"]
 
 REFGENOMES, = glob_wildcards("../data/extraRef/{ref}.fa")
 
-THREADS = 8
+THREADS = 16
 
 rule all:
 	input: expand("../out/{test}_{ref}_blastAll_ps",zip,test=TEST_SPEC,ref=TAX_ID),"../out/collectedPhylo.RData"
@@ -56,12 +59,6 @@ rule endOGG:
 	output: "../out/{test}_{ref}_END"
 	shell: "module load python/anaconda/2.7; sed 's/gnl.* //' {input[geneList]} | awk {{'print$2'}} | sort | uniq > ../temp/geneEdit; python2.7 getOGG.py ../temp/geneEdit {output} {THREADS} {input[oggList]} EOG090R"
 
-#Get Aculeata OGGs. "EOG090R" is the prefix for all endopterygota genes
-rule endOGG:
-	input: geneList="../out/{ref}_{test}_blastRes.tab", oggList="../temp/{ref}.tab"
-	output: "../out/{test}_{ref}_END"
-	shell: "module load python/anaconda/2.7; sed 's/gnl.* //' {input[geneList]} | awk {{'print$2'}} | sort | uniq > ../temp/geneEdit; python2.7 getOGG.py ../temp/geneEdit {output} {THREADS} {input[oggList]} EOG090R"
-
 
 #Get Aculeata OGGs. "EOG090R" is the prefix for all endopterygota genes
 rule acuOGG:
@@ -71,7 +68,10 @@ rule acuOGG:
 
 #Collect ps results for downstream analysis
 rule collectPS:
-	input: rules.acuOGG.output, rules.endOGG.output, rules.transcriptGeneMap.output, rules.blastAll.output
+	input: expand("../out/{test}_{ref}_ACU",zip,test=TEST_SPEC,ref=TAX_ID),
+			expand("../out/{test}_{ref}_END",zip,test=ALL_SPEC,ref=TAX_ID_ALL),
+			expand("../out/TGmap_{test}.txt",test=ALL_SPEC),
+			expand("../out/{test}_{ref}_blastAll_ps",zip,test=TEST_SPEC,ref=TAX_ID)
 	output: "../out/collectedPhylo.RData"
 	shell: "Rscript collectPS.R"
 
