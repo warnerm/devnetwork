@@ -415,6 +415,8 @@ beeCB = euclDist(beeRes_allstage[[1]])
 antSB = euclDist(antSocRes[[1]])
 beeSB = euclDist(beeSocRes[[1]])
 
+antSB$type=beeSB$type="behavior"
+antCB$type=beeCB$type="caste"
 antBias2 = rbind(antCB,antSB)
 beeBias2 = rbind(beeCB,beeSB)
 
