@@ -1,7 +1,7 @@
-load("~/GitHub/devnetwork/data/DEtests.RData")
-load("~/GitHub/devnetwork/phylo_results/collectedPhylo.RData")
+load("~/GitHub/devnetwork/results/DEtests.RData")
+load("~/GitHub/devnetwork/results/collectedPhylo.RData")
 setwd("~/GitHub/devnetwork/src/analysis_R/")
-load("../../cluster_results/PlaidResults.RData")
+load("../../results/PlaidResults.RData")
 
 TGmap <- read.table("~/GitHub/devnetwork/phylo_results/TGmap_Amel.txt")
 TNmap <- as.data.frame(fread("~/GitHub/devnetwork/data/AmelTranName.txt",sep="~",header=FALSE))
@@ -261,6 +261,11 @@ main_theme=theme_bw()+
         plot.title = element_text(hjust = 0.5,size=25,face = "bold"),
         legend.text = element_text(size=16),
         legend.title = element_text(size = 22))
+
+plot2theme <- main_theme + theme(plot.margin = unit(c(0.5,0.5,0.5,0.5),"cm"),
+                                 axis.title.x = element_text(margin = margin(t=10,b=0,l=0,r=0)),
+                                 axis.title.y = element_text(margin = margin(t=0,b=0,l=0,r=10)))
+
 
 beeT <- read.table("../../data/bees.tpm.txt",header=TRUE)
 antT <- read.table("../../data/ants.tpm.txt",header=TRUE)
@@ -1502,11 +1507,6 @@ ggsave(p,file = "~/GitHub/devnetwork/figures/Fig4ef.png",height=6,width=10,dpi=3
 cbAps$kTotal = cbAps$kTotal/max(cbAps$kTotal)
 cbBps$kTotal = cbBps$kTotal/max(cbBps$kTotal)
 
-plot2theme <- main_theme + theme(plot.margin = unit(c(0.5,0.5,0.5,0.5),"cm"),
-                                 axis.title.x = element_text(margin = margin(t=10,b=0,l=0,r=0)),
-                                 axis.title.y = element_text(margin = margin(t=0,b=0,l=0,r=10)))
-
-
 p1C <- ggplot(cbAps[cbAps$type=="caste",],aes(x = kTotal,y=cb_noAbd))+
   geom_hex(bins=70)+
   scale_fill_gradient(low = "blue",high="red")+
@@ -1994,14 +1994,51 @@ colnames(prot) = c('Amel','Sinv','Nvit','A_S','A_N','S_N')
 map <- read.table("~/Data/Nurse_Larva/map")
 colnames(map) = c("gene_Amel","Amel")
 prot = merge(prot,map,by="Amel")
+prot$mean = apply(prot[,c(4:6)],1,mean)
+prot = merge(prot,ACUogg,by="gene_Amel")
+
+Acb <- merge(prot,antCB,by.x="gene_Mphar",by.y="Gene")
+Acb$species = "ant"
+Bcb <- merge(prot,beeCB,by.x="gene_Amel",by.y="Gene")
+Bcb$species = "bee"
+
+
+p1C <- ggplot(Acb,aes(x = mean,y=cb_noAbd))+
+  geom_hex(bins=70)+
+  scale_fill_gradient(low = "blue",high="red")+
+  plot2theme+
+  ylim(0,2.5)+
+  geom_smooth(method="lm",size=1.5,se=FALSE,color="black")+
+  xlab("evolutionary rate")+
+  ggtitle("ant")+
+  ylab("overall caste bias")+
+  #scale_x_log10(breaks = c(0.01,0.1,1))+
+  theme(legend.position="none")
+
+
+p2C <- ggplot(Bcb,aes(x = mean,y=cb_noAbd))+
+  geom_hex(bins=70)+
+  scale_fill_gradient(low = "blue",high="red")+
+  plot2theme+
+  ylim(0,2.5)+
+  geom_smooth(method="lm",size=1.5,se=FALSE,color="black")+
+  xlab("evolutionary rate")+
+  ggtitle("bee")+
+  ylab("overall caste bias")+
+  #scale_x_log10(breaks = c(0.01,0.1,1))+
+  theme(legend.position="none")
+
+p <- arrangeGrob(p1C,p2C,ncol=2)
+ggsave(p,file="~/GitHub/devnetwork/figures/FigEvol.png",height=6,width=12,dpi=300)
+
+cor.test(Acb$mean,Acb$cb_noAbd,method="spearman")
+cor.test(Bcb$mean,Bcb$cb_noAbd,method="spearman")
 
 ogg2 <- read.csv("~/GitHub/devnetwork/data/HymOGG_hym.csv",sep=" ")
 t = table(ogg2$OGG)
 t = t[t==1]
 ogg11 = ogg2[ogg2$OGG %in% names(t),] #get 1-1 orthologs
 
-prot = merge(prot,ogg11)
-prot$mean = apply(prot[,c(5:7)],1,mean)
 
 aEvol = merge(antRes[[2]],f.est,by="Gene")
 

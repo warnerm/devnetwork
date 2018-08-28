@@ -275,4 +275,14 @@ beeSocRes <- parseDE(beeSocial,"forager","nurse",0.1)
 antDevel <- genDevTool(0.1,factorA,ant)
 beeDevel <- genDevTool(0.1,factorB,bee)
 
-save(beeTests,beeTests_oneLarv,antRes,beeRes,antRes_allstage,beeRes_allstage,antSocRes,beeSocRes,antTests,antTests_oneLarv,ant_sexDE,bee_sexDE,ant_VM,bee_VM,beeSocial,antSocial,antDevel,beeDevel,file = "~/GitHub/devnetwork/data/DEtests.RData")
+DevTool2 <- function(factor,data){
+  f = factor[factor$stage != 8 &factor$stage!=7,]
+  design <- model.matrix(~stage+colony+caste,data=droplevels(f))
+  devGenes <- EdgeR(data[,colnames(data) %in% f$sample],design,2:7)
+  return(devGenes)
+}
+
+antDevel2 = DevTool2(factorA,ant)
+beeDevel2 = DevTool2(factorB,bee)
+
+save(antDevel2,beeDevel2,beeTests,beeTests_oneLarv,antRes,beeRes,antRes_allstage,beeRes_allstage,antSocRes,beeSocRes,antTests,antTests_oneLarv,ant_sexDE,bee_sexDE,ant_VM,bee_VM,beeSocial,antSocial,antDevel,beeDevel,file = "~/GitHub/devnetwork/data/DEtests.RData")

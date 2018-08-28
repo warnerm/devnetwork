@@ -612,6 +612,34 @@ grid_arrange_shared_legend(list(Ac+
                                 As,Bc,Bs),"bottom")
 dev.off()
 
+ogg11$DEtype = "non-conserved/non-DE"
+ogg11$DEtype[ogg11$gene_Amel %in% beeD & ogg11$gene_Mphar %in% antD] = "conserved development"
+ogg11$DEtype[ogg11$gene_Amel %in% c(BsexRes[[3]][[2]],BsexRes[[3]][[3]]) & ogg11$gene_Mphar %in% c(AsexRes[[3]][[2]],AsexRes[[3]][[3]])] = "conserved sex"
+ogg11$DEtype[ogg11$gene_Amel %in% c(BsexRes[[3]][[2]],BsexRes[[3]][[3]]) & 
+               ogg11$gene_Mphar %in% c(AsexRes[[3]][[2]],AsexRes[[3]][[3]]) &
+               ogg11$gene_Amel %in% beeD & ogg11$gene_Mphar %in% antD] = "conserved sex and development"
+
+ggplot(ogg11,aes(x=abdDE,fill=DEtype))+
+  geom_bar(stat="count",position="fill")
+
+oF = ogg11[!grepl("ant",ogg11$abdDE),]
+t <- table(oF$abdDE,oF$DEtype)
+mosaicplot(t,shade=TRUE)
+
+p1 <- ggplot(data=ogg11[!grepl("ant",ogg11$abdDE),])+
+  geom_mosaic(aes(x = product(DEtype,abdDE),
+                  fill = factor(DEtype)),na.rm=T)+
+  ylab("proportion of genes")+
+  xlab("abdominal caste bias")+
+  main_theme+
+  scale_fill_manual(values = c("red","blue","purple","grey40"),name = "gene type")+
+  coord_cartesian(xlim=c(0.05/1.1, 1.05/1.1))+
+  scale_y_continuous(expand=c(0,0))+
+  theme(legend.position = c(0.73,0.88),
+        legend.title = element_text(face = "bold"),
+        axis.text.x = element_text(angle = -25,hjust=0))
+ggsave(p1,file="~/GitHub/devnetwork/figures/DEGmos.png",width=8,height=8,dpi=300)
+
 ############
 
 antCor = cor(t(antT))^6
@@ -728,6 +756,7 @@ p2 <- arrangeGrob(p5,p6,p7,p8)
 
 ggsave(p,file = "~/GitHub/devnetwork/figures/tauDEGs.png",height=10,width=12,dpi=300)
 ggsave(p2,file = "~/GitHub/devnetwork/figures/connDEGs.png",height=10,width=12,dpi=300)
+
 
 
 
