@@ -12,6 +12,7 @@ Prior to running scripts dealing with figures, multiple separate analyses need t
 For the moment, data used for phylostratigraphy and for aligning reads (i.e. genomes and fastq) are not included.
 
 _Further descriptions_
+
 The file "results/DEtests.RData" contains a number of lists of differential expression results as well as summarized data
 
 Lists of DE results:
