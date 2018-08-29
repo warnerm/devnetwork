@@ -262,18 +262,17 @@ antSocial <- speciesSocial(ant,factorA)
 
 #Extract logFC, FDR from DE results
 names(antTests_oneLarv) = names(beeTests_oneLarv) = c("larva","pupa","head","thorax","abdomen")
+names(beeTests) = names(antTests) = c("L2","L3","L4","L5","pupa","head","thorax","abdomen")
+
 antRes <- parseDE(antTests_oneLarv,"worker","queen",0.1)
 beeRes <- parseDE(beeTests_oneLarv,"worker","queen",0.1)
 antRes_allstage <- parseDE(antTests,"worker","queen",0.1)
 beeRes_allstage <- parseDE(beeTests,"worker","queen",0.1)
 
 #Get social results
+names(antSocial) = names(beeSocial) = c("head","thorax","abdomen")
 antSocRes <- parseDE(antSocial,"forager","nurse",0.1)
 beeSocRes <- parseDE(beeSocial,"forager","nurse",0.1)
-
-#Get lists of developmental genes (DE across development in queens and workers)
-antDevel <- genDevTool(0.1,factorA,ant)
-beeDevel <- genDevTool(0.1,factorB,bee)
 
 #Remove pupae (was including them previously)
 DevTool2 <- function(factor,data){
@@ -286,4 +285,4 @@ DevTool2 <- function(factor,data){
 antDevel2 = DevTool2(factorA,ant)
 beeDevel2 = DevTool2(factorB,bee)
 
-save(antDevel2,beeDevel2,beeTests,beeTests_oneLarv,antRes,beeRes,antRes_allstage,beeRes_allstage,antSocRes,beeSocRes,antTests,antTests_oneLarv,ant_sexDE,bee_sexDE,ant_VM,bee_VM,beeSocial,antSocial,antDevel,beeDevel,file = "results/DEtests.RData")
+save(antDevel2,beeDevel2,beeTests,beeTests_oneLarv,antRes,beeRes,antRes_allstage,beeRes_allstage,antSocRes,beeSocRes,antTests,antTests_oneLarv,ant_sexDE,bee_sexDE,ant_VM,bee_VM,beeSocial,antSocial,file = "results/DEtests.RData")
