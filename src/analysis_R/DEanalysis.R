@@ -191,7 +191,7 @@ parseDE <- function(tests,name1,name2,FDR){
   all_test <- Reduce(function(x,y) {merge(x,y,by="Gene")},tests)
   all_test2 <- all_test[,c(1,seq(2,(5*length(tests) + 1),by=5))]
   all_test3 <- all_test[,c(1,seq(6,(5*length(tests) + 1),by=5))]
-  colnames(all_test2) = c("Gene",names(tests))
+  colnames(all_test2) = names(all_test3) = c("Gene",names(tests))
   DEtest = all_test2
   DEres <- do.call(cbind,(lapply(1:length(tests),function(j){
     apply(all_test2,1,function(x){
