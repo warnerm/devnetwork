@@ -52,6 +52,6 @@ rule collect_plaid:
 
 #Calculate connectivity
 rule calcConn:
-	output: "results/antConn.csv","results/beeConn.csv"
+	output: "results/antConnectivity.csv","results/beeConnectivity.csv"
 	shell: "Rscript src/analysis_R/getConn.R"
 

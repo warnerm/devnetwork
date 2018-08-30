@@ -7,17 +7,17 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Loading previous results
+**Loading previous results**
 ```{r loading}
+setwd("~/GitHub/devnetwork/")
 load("results/DEtests.RData")
 load("results/collectedPhylo.RData")
 antPlaid <- read.csv("results/antPlaidGenes.csv")
 beePlaid <- read.csv("results/beePlaidGenes.csv")
 tau <- read.csv("results/bee_tau.csv")
 sexGenes <- read.csv("results/dmel_sexGenes.csv")
-antConn <- read.csv("results/antConn.csv")
-beeConn <- read.csv("results/beeConn.csv")
-
+antConn <- read.csv("results/antConnectivity.csv")
+beeConn <- read.csv("results/beeConnectivity.csv")
 
 beeT <- read.table("data/bees.tpm.txt",header=TRUE)
 antT <- read.table("data/ants.tpm.txt",header=TRUE)
@@ -32,7 +32,7 @@ beeT = beeT[rowSums(beeT) > 0,]
 
 ```
 
-## Loading libraries, themes
+**Loading libraries, themes**
 ```{r themes,include=FALSE}
 library(cowplot)
 library(RColorBrewer)
@@ -123,12 +123,12 @@ p <- ggplot(mA,aes(x=queen,y=worker))+
         plot.title = element_text(hjust = 0.5,size=25,face = "bold"),
         panel.border = element_rect(size = 1, color = "black",fill = NA)) 
 ```
-##0.1 Number of times a gene is queen- and worker-biased across development
+**0.1 Number of times a gene is queen- and worker-biased across development**
 ```{r numDEplot,fig.height=8,fig.width=10,echo=FALSE}
 p
 ```
 
-##0.2 Correlation of log fold-change across stages
+**0.2 Correlation of log fold-change across stages**
 ```{r lfcCor}
 
 #Correlation of log fold change across development
@@ -179,11 +179,11 @@ pl <- lapply(list(CasteCor[[1]],CasteCor_allStage[[1]],BehavCor[[1]]), function(
 })
 pl[[3]] = pl[[3]] + ylab("correlation of nurse/forager\nlog2 fold-change")
 ```
-##0.2 Correlation of log fold-change across stages
-```{r lfcPlot,fig.height=6,fig.width=18}
+**0.2 Correlation of log fold-change across stages**
+```{r lfcPlot,fig.height=6,fig.width=18,echo=FALSE}
 do.call(grid.arrange,c(pl,nrow=1))
 ```
-##1.1 Caste-bias across development
+**1.1 Caste-bias across development**
 ```{r compare def}
 compDef <- function(antR,beeR){
   
@@ -310,12 +310,12 @@ pQ <- ggdraw()+
   draw_plot(p3,x=0.57,y=0.69,height=0.18,width=0.18)
 ```
 
-##1.1 Caste bias across development
+**1.1 Caste bias across development**
 ```{r plotCaste, fig.height=6,fig.width=11,echo=FALSE}
 pQ
 ```
 
-##1.2 Nurse/forager bias
+**1.2 Nurse/forager bias**
 ```{r behavOverlap}
 d = compDef(antSocRes[[2]],beeSocRes[[2]])
 
@@ -392,7 +392,7 @@ pSoc <- ggdraw()+
 pSoc
 ```
 
-##1.3 Phylostrata of genes with conserved abdominal caste bias
+**1.3 Phylostrata of genes with conserved abdominal caste bias**
 ```{r phylostrataAbd}
 
 psO = merge(AllPS_sum,ACUogg,by="OGGacu")
@@ -422,14 +422,15 @@ p <- ggplot(psO,aes(x = a2,fill = forcats::fct_rev(psName)))+
         plot.margin = unit(c(0.5,2,0.5,2),"cm"))
 ```
 
-##1.3 Estimated evolutionary age of genes with abdominal caste bias
+**1.3 Estimated evolutionary age of genes with abdominal caste bias**
 ```{r plotAbdPh,fig.height=6,fig.width=6,echo=FALSE}
 p
 ```
 
-##2.1 Bicluster associated with queen abdominal expression
+**2.1 Bicluster associated with queen abdominal expression**
+-Previously performed plaid clustering and extracted genes commonly found in a queen abdomen-specific bicluster.
 
-##3.1 Comparing caste bias to sex bias
+**3.1 Comparing caste bias to sex bias**
 ```{r compSex}
 extractBias <- function(DEres){
   sexQ <- rownames(DEres)[DEres$FDR < 0.1 & DEres$logFC < 0]
@@ -444,7 +445,7 @@ BsexRes <- lapply(bee_sexDE,extractBias)
 BcasteRes <- lapply(beeTests_oneLarv[c(3:5)],extractBias)
 ```
 
-##Identify genes with conserved bias for plotting
+**Identify genes with conserved bias for plotting**
 ```{r conbias}
 ogg11 = ACUogg
 ogg11$abdDE = "non-conserved/non-DE"
@@ -452,7 +453,7 @@ ogg11$abdDE[(ogg11$gene_Amel %in% BcasteRes[[3]][[2]] & ogg11$gene_Mphar %in% Ac
 ogg11$abdDE[(ogg11$gene_Amel %in% BcasteRes[[3]][[3]] & ogg11$gene_Mphar %in% AcasteRes[[3]][[3]])] = "conserved worker"
 ```
 
-##3.1 Construct sex bias vs caste bias plots
+**3.1 Construct sex bias vs caste bias plots**
 ```{r plotBias,fig.width=12,fig.height=6}
 biasPlot <- function(d1,d2,spec){
     
@@ -490,7 +491,7 @@ p2 = biasPlot(BsexRes[[3]][[1]],BcasteRes[[3]][[1]],"gene_Amel")+
 grid.arrange(p1,p2,nrow=1)
 ```
 
-##3.2 Comparison to D. melanogaster
+**3.2 Comparison to D. melanogaster**
 ```{r DmelComp,fig.height=6,fig.width=6}
 DmelSC = merge(sexGenes,ogg11,by="gene_Amel")
 DmelSC$abdDE = factor(DmelSC$abdDE,levels = c("conserved queen","conserved worker","non-DE/inconsistent"))
@@ -513,7 +514,7 @@ p4 <- ggplot(DmelSC[grepl("conserved",DmelSC$abdDE),],aes(x = abdDE,y=-logFC))+
 p4
 ```
 
-##4.1 Calculation of overall caste bias
+**4.1 Calculation of overall caste bias**
 ```{r casteBias}
 #Calculate euclidean distance
 euclDist <- function(res){
@@ -539,7 +540,7 @@ antCB$type=beeCB$type="caste"
 antBias2 = rbind(antCB,antSB)
 beeBias2 = rbind(beeCB,beeSB)
 ```
-##4.1 Caste/Behavior bias vs connectivity
+**4.1 Caste/Behavior bias vs connectivity**
 ```{r cbConnPlots,fig.height=6,fig.width=12}
 cbAps = merge(antBias2,Aps,by="Gene")
 cbBps = merge(beeBias2,Bps,by="Gene")
@@ -574,7 +575,7 @@ grid.arrange(p1,p3,nrow=1)
 grid.arrange(p2,p4,nrow=1)
 ```
 
-##4.2 Caste/Behavior bias vs phylostrata
+**4.2 Caste/Behavior bias vs phylostrata**
 ```{r cbPsPlots,fig.height=6,fig.width=12}
 phPlot <- function(data,type,spec){
   pA <- ggplot(data[data$type==type & !is.na(data$psName),],aes(x = psName,y=cb,fill=psName))+
@@ -599,8 +600,8 @@ p4 <- phPlot(cbBps,"behavior","bee")
 grid.arrange(p1,p3,nrow=1)
 grid.arrange(p2,p4,nrow=1)
 ```
-##4.3 Caste bias vs tissue specificity
-tissue specificity is estimated across 12 honey bee tissues.
+**4.3 Caste bias vs tissue specificity**
+-tissue specificity is estimated across 12 honey bee tissues.
 ```{r tissue,fig.height=8,fig.width=8}
 bT = merge(tau,beeBias2,by="Gene")
 bT$species = "bee"
