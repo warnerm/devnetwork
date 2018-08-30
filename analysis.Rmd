@@ -64,9 +64,121 @@ plot2theme <- main_theme + theme(plot.margin = unit(c(0.5,0.5,0.5,0.5),"cm"),
                                  axis.title.x = element_text(margin = margin(t=10,b=0,l=0,r=0)),
                                  axis.title.y = element_text(margin = margin(t=0,b=0,l=0,r=10)))
 ```
+##0.1 Number of times a gene is queen- and worker-biased across development
+```{r timesDE}
+#Summarize number of times DE
+sumDE <- function(dfDE,type1,type2){
+  dfDE$numQueen = apply(dfDE[,c(2:ncol(dfDE))],1,function(x) sum(x == type1))
+  dfDE$numWorker = apply(dfDE[,c(2:ncol(dfDE))],1,function(x) sum(x == type2))
+  d = table(dfDE$numQueen,dfDE$numWorker)
+  m = melt(d)
+  colnames(m)[c(1,2)] = c(type1,type2)
+  return(m)
+}
 
-## Caste-bias across development
 
+m1 = sumDE(antRes[[2]],"queen","worker")
+m2 = sumDE(beeRes[[2]],"queen","worker")
+
+#Add these since there are no genes DE all five times in Apis 
+m2E = t(sapply(seq(0,5),function(i) c(queen=i,worker=5,value=0)))
+m2Eb = t(sapply(seq(0,5),function(i) c(queen=5,worker=i,value=0)))
+m2E = rbind(m2Eb,m2E)
+m2 = rbind(m2,m2E)
+
+m1$species = "M. pharaonis"
+m2$species = "A. mellifera"
+mA = rbind(m1,m2)
+mA$species = factor(mA$species,levels= c("M. pharaonis","A. mellifera"))
+
+
+#Create heatmap of differential expression (number of times DE for queens and workers)
+p <- ggplot(mA,aes(x=queen,y=worker))+
+  geom_tile(aes(fill = value))+
+  facet_grid(. ~ species)+
+  scale_fill_gradient(name = "number of genes",trans = "log",
+                      breaks = c(1,10,100,1000),
+                      limits = c(1,10000),
+                      labels = c(1,10,100,1000))+
+  geom_text(aes(x = queen,y = worker,label = value),color="white")+
+  main_theme+
+  scale_y_continuous(name = "number of times worker-biased",
+                     breaks  = seq(0,5),
+                     expand = c(0,0))+
+  scale_x_continuous(name = "number of times queen-biased",
+                     breaks = seq(0,5),
+                     expand = c(0,0))+
+  theme(legend.position = "right",
+        axis.line=element_line(color="black"),
+        axis.text = element_text(size=16),
+        axis.title = element_text(size = 22,face="bold"),
+        strip.text = element_text(size=22,face="bold"),
+        legend.title = element_blank(),
+        strip.background = element_rect(color=NA,fill=NA),
+        plot.title = element_text(hjust = 0.5,size=25,face = "bold"),
+        panel.border = element_rect(size = 1, color = "black",fill = NA)) 
+```
+##0.1 Number of times a gene is queen- and worker-biased across development
+```{r numDEplot,fig.height=8,fig.width=10,echo=FALSE}
+p
+```
+
+##0.2 Correlation of log fold-change across stages
+```{r lfcCor}
+
+#Correlation of log fold change across development
+lfcCor <- function(antD,beeD){
+  nStage = ncol(antD) - 1 
+  antD <- merge(antD,ACUogg,by.x = "Gene",by.y = "gene_Mphar")
+  beeD <- merge(beeD,ACUogg,by.x = "Gene",by.y = "gene_Amel")
+  antD = antD[antD$OGG %in% beeD$OGG,]
+  beeD = beeD[beeD$OGG %in% antD$OGG,]
+  antD = antD[order(antD$OGG),]
+  beeD = beeD[order(beeD$OGG),]
+  d = data.frame(stage = colnames(antD)[c(2:(nStage+1))])
+  dAbs = data.frame(stage = colnames(antD)[c(2:(nStage+1))])
+  for (i in 1:nStage){
+    t = cor.test(antD[,i+1],beeD[,i+1])
+    d[i,2] = t$estimate
+    d[i,3] = t$conf.int[1]
+    d[i,4] = t$conf.int[2]
+    t = cor.test(abs(antD[,i+1]),abs(beeD[,i+1]))
+    dAbs[i,2] = t$estimate
+    dAbs[i,3] = t$conf.int[1]
+    dAbs[i,4] = t$conf.int[2]
+  }
+  colnames(d) = colnames(dAbs) = c("Stage","cor","c1","c2")
+  return(list(d,dAbs))
+}
+CasteCor <- lfcCor(antRes[[1]],beeRes[[1]])
+CasteCor_allStage <- lfcCor(antRes_allstage[[1]],beeRes_allstage[[1]])
+BehavCor <- lfcCor(antSocRes[[1]],beeSocRes[[1]])
+
+CasteCor[[1]]$Stage = as.character(CasteCor[[1]]$Stage)
+CasteCor[[1]]$Stage[1] = "larva*"
+CasteCor_allStage[[1]]$Stage = c("L2","L3","L4","L5","pupa","head","thorax","abdomen")
+BehavCor[[1]]$Stage = c("head","thorax","abdomen")
+CasteCor[[1]]$Stage = factor(CasteCor[[1]]$Stage,levels = CasteCor[[1]]$Stage)
+CasteCor_allStage[[1]]$Stage = factor(CasteCor_allStage[[1]]$Stage,levels = CasteCor_allStage[[1]]$Stage)
+BehavCor[[1]]$Stage = factor(BehavCor[[1]]$Stage,levels = BehavCor[[1]]$Stage)
+
+
+pl <- lapply(list(CasteCor[[1]],CasteCor_allStage[[1]],BehavCor[[1]]), function(x){
+  ggplot(x,aes(x = Stage,y=cor))+
+    geom_bar(stat="identity")+main_theme+
+    xlab("stage/tissue")+
+    geom_errorbar(aes(ymin=c1,ymax=c2),width=0.2)+
+    ylab("correlation of queen/worker\nlog2 fold-change")+
+    theme(plot.margin=unit(c(0.5,1.5,0.5,0.5),"cm"),
+          axis.text.x = element_text(hjust=0,angle=-25))
+})
+pl[[3]] = pl[[3]] + ylab("correlation of nurse/forager\nlog2 fold-change")
+```
+##0.2 Correlation of log fold-change across stages
+```{r lfcPlot,fig.height=6,fig.width=18}
+do.call(grid.arrange,c(pl,nrow=1))
+```
+##1.1 Caste-bias across development
 ```{r compare def}
 compDef <- function(antR,beeR){
   
@@ -193,12 +305,12 @@ pQ <- ggdraw()+
   draw_plot(p3,x=0.57,y=0.69,height=0.18,width=0.18)
 ```
 
-##Figure 1a. Caste bias across development
+##1.1 Caste bias across development
 ```{r plotCaste, fig.height=6,fig.width=11,echo=FALSE}
 pQ
 ```
 
-##Figure 1b. Nurse/forager bias
+##1.2 Nurse/forager bias
 ```{r behavOverlap}
 d = compDef(antSocRes[[2]],beeSocRes[[2]])
 
@@ -270,12 +382,12 @@ pSoc <- ggdraw()+
   draw_plot(p3,x=0.59,y=0.58,height=0.18,width=0.18)
 ```
 
-##Figure 1b. nurse/forager bias
+##1.2 nurse/forager bias
 ```{r behavPlot, fig.height=6,fig.width=11,echo=FALSE}
 pSoc
 ```
 
-##Phylostrata of genes with conserved abdominal caste bias
+##1.3 Phylostrata of genes with conserved abdominal caste bias
 ```{r phylostrataAbd}
 
 psO = merge(AllPS_sum,ACUogg,by="OGGacu")
@@ -305,12 +417,12 @@ p <- ggplot(psO,aes(x = a2,fill = forcats::fct_rev(psName)))+
         plot.margin = unit(c(0.5,2,0.5,2),"cm"))
 ```
 
-##Figure 1c. Estimated evolutionary age of genes with abdominal caste bias
+##1.3 Estimated evolutionary age of genes with abdominal caste bias
 ```{r plotAbdPh,fig.height=6,fig.width=6,echo=FALSE}
 p
 ```
 
-##Comparing caste bias to sex bias
+##3.1 Comparing caste bias to sex bias
 ```{r compSex}
 extractBias <- function(DEres){
   sexQ <- rownames(DEres)[DEres$FDR < 0.1 & DEres$logFC < 0]
@@ -333,7 +445,7 @@ ogg11$abdDE[(ogg11$gene_Amel %in% BcasteRes[[3]][[2]] & ogg11$gene_Mphar %in% Ac
 ogg11$abdDE[(ogg11$gene_Amel %in% BcasteRes[[3]][[3]] & ogg11$gene_Mphar %in% AcasteRes[[3]][[3]])] = "conserved worker"
 ```
 
-##Construct sex bias vs caste bias plots
+##3.1 Construct sex bias vs caste bias plots
 ```{r plotBias,fig.width=12,fig.height=6}
 biasPlot <- function(d1,d2,spec){
     
@@ -371,7 +483,7 @@ p2 = biasPlot(BsexRes[[3]][[1]],BcasteRes[[3]][[1]],"gene_Amel")+
 grid.arrange(p1,p2,nrow=1)
 ```
 
-##Comparison to D. melanogaster
+##3.2 Comparison to D. melanogaster
 ```{r DmelComp,fig.height=6,fig.width=6}
 DmelSC = merge(sexGenes,ogg11,by="gene_Amel")
 DmelSC$abdDE = factor(DmelSC$abdDE,levels = c("conserved queen","conserved worker","non-DE/inconsistent"))
@@ -394,7 +506,7 @@ p4 <- ggplot(DmelSC[grepl("conserved",DmelSC$abdDE),],aes(x = abdDE,y=-logFC))+
 p4
 ```
 
-##Calculation of overall caste bias
+##4.1 Calculation of overall caste bias
 ```{r casteBias}
 #Calculate euclidean distance
 euclDist <- function(res){
@@ -427,7 +539,7 @@ antConn = data.frame(Gene = rownames(antCor),kTotal = rowSums(antCor))
 beeConn = data.frame(Gene = rownames(beeCor), kTotal = rowSums(beeCor))
 
 ```
-##Caste/Behavior bias vs connectivity
+##4.1 Caste/Behavior bias vs connectivity
 ```{r cbConnPlots,fig.height=6,fig.width=12}
 cbAps = merge(antBias2,Aps,by="Gene")
 cbBps = merge(beeBias2,Bps,by="Gene")
@@ -462,7 +574,7 @@ grid.arrange(p1,p3,nrow=1)
 grid.arrange(p2,p4,nrow=1)
 ```
 
-##Caste/Behavior bias vs phylostrata
+##4.2 Caste/Behavior bias vs phylostrata
 ```{r cbPsPlots,fig.height=6,fig.width=12}
 phPlot <- function(data,type,spec){
   pA <- ggplot(data[data$type==type & !is.na(data$psName),],aes(x = psName,y=cb,fill=psName))+
@@ -486,6 +598,27 @@ p4 <- phPlot(cbBps,"behavior","bee")
 
 grid.arrange(p1,p3,nrow=1)
 grid.arrange(p2,p4,nrow=1)
+```
+## 4.3 Caste bias vs tissue specificity
+tissue specificity is estimated across 12 honey bee tissues.
+```{r tissue,fig.height=8,fig.width=8}
+tau = data.frame(Gene = names(beeTau[[1]]),tau = beeTau[[1]])
+
+bT = merge(tau,beeBias2,by="Gene")
+bT$species = "bee"
+bT$type = factor(bT$type,levels = c("caste","behavior"))
+levels(bT$type) = c("caste bias","behavior bias")
+
+p1 <- ggplot(bT,aes(x=tau,y=cb))+
+  geom_point(size=1,alpha=0.6,pch=21,aes(fill=type),color="grey60")+
+  geom_smooth(se=FALSE,aes(color=type))+
+  scale_color_manual(values = SexPal)+
+  scale_fill_manual(values = SexPal)+
+  main_theme+xlab("tissue specificity")+ylab("bee bias")+
+  theme(legend.position=c(0.2,0.6),
+        legend.text = element_text(size=20),
+        legend.title=element_blank())
+p1
 ```
 
 ##Development section
