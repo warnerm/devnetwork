@@ -24,14 +24,14 @@ beeT = beeT[rowSums(beeT) > 0,]
 
 
 data = antT
-runs = data.frame(run = seq(1,100,by=1))
+runs = data.frame(run = seq(1,1000,by=1))
 sjob <- slurm_apply(plaid, runs, jobname = 'plaid',
                     nodes = 4, cpus_per_node = 3, add_objects="data",submit = TRUE)
 antPl <- get_slurm_out(sjob,outtype='raw') #get output as lists
 
 
 data = beeT
-runs = data.frame(run = seq(1,100,by=1))
+runs = data.frame(run = seq(1,1000,by=1))
 sjob <- slurm_apply(plaid, runs, jobname = 'plaid',
                     nodes = 4, cpus_per_node = 3, add_objects="data",submit = TRUE)
 beePl <- get_slurm_out(sjob,outtype='raw') #get output as lists
