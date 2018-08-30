@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 load("results/DEtests.RData")
 load("results/collectedPhylo.RData")
 load("results/PlaidResults.RData")
-load("results/tau_results.RData")
+tau <- read.csv("results/bee_tau.csv")
 sexGenes <- read.csv("results/dmel_sexGenes.csv")
 beeT <- read.table("data/bees.tpm.txt",header=TRUE)
 antT <- read.table("data/ants.tpm.txt",header=TRUE)
@@ -602,8 +602,6 @@ grid.arrange(p2,p4,nrow=1)
 ## 4.3 Caste bias vs tissue specificity
 tissue specificity is estimated across 12 honey bee tissues.
 ```{r tissue,fig.height=8,fig.width=8}
-tau = data.frame(Gene = names(beeTau[[1]]),tau = beeTau[[1]])
-
 bT = merge(tau,beeBias2,by="Gene")
 bT$species = "bee"
 bT$type = factor(bT$type,levels = c("caste","behavior"))
