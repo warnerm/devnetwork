@@ -25,7 +25,7 @@ calculateTau <- function(factor,expr){
 
 beeTau = calculateTau(samples,fpkm)
 
-tau <- data.frame(Gene = names(beeTau[[1]]),tau=tau)
+tau <- data.frame(Gene = names(beeTau[[1]]),tau=beeTau[[1]])
 
 write.csv(tau,file = "../results/bee_tau.csv")
 # 
