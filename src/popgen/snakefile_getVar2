@@ -51,10 +51,12 @@ rule makeDict:
 #				--mbq 20 \
 #				--max-alternate-alleles 4"""
 
+#last section removes indels, which are causing a problem with allelic primatives
 rule samtools:
 	input: BAMs = expand("../temp/alignments/africa_cerana/{sample}.bam",sample=SAMPLES),bed = "../ref/exons.bed"
 	output: protected("../var/samtools.vcf")
-	shell: "samtools mpileup -l {input[bed]} -ugf {REF} {input[BAMs]} | bcftools call -vc - | vcfutils.pl varFilter -D 500 > {output}"
+	shell: "samtools mpileup -l {input[bed]} -ugf {REF} {input[BAMs]} | bcftools call -vc - | vcfutils.pl varFilter -D 500 | vcftools --vcf - --remove-indels > {output}"
+
 
 rule platypus:
 	input: expand("../temp/alignments/africa_cerana/{sample}.bam",sample=SAMPLES),bed = "../ref/exons.bed"
