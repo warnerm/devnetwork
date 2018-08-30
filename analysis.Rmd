@@ -15,6 +15,10 @@ antPlaid <- read.csv("results/antPlaidGenes.csv")
 beePlaid <- read.csv("results/beePlaidGenes.csv")
 tau <- read.csv("results/bee_tau.csv")
 sexGenes <- read.csv("results/dmel_sexGenes.csv")
+antConn <- read.csv("results/antConn.csv")
+beeConn <- read.csv("results/beeConn.csv")
+
+
 beeT <- read.table("data/bees.tpm.txt",header=TRUE)
 antT <- read.table("data/ants.tpm.txt",header=TRUE)
 modifyDF <- function(data){
@@ -423,6 +427,8 @@ p <- ggplot(psO,aes(x = a2,fill = forcats::fct_rev(psName)))+
 p
 ```
 
+##2.1 Bicluster associated with queen abdominal expression
+
 ##3.1 Comparing caste bias to sex bias
 ```{r compSex}
 extractBias <- function(DEres){
@@ -532,13 +538,6 @@ antSB$type=beeSB$type="behavior"
 antCB$type=beeCB$type="caste"
 antBias2 = rbind(antCB,antSB)
 beeBias2 = rbind(beeCB,beeSB)
-
-#Calculate connectivity 
-antCor = cor(t(antT[rowSums(antT) > 0,]))^6
-beeCor = cor(t(beeT[rowSums(beeT) > 0,]))^6
-antConn = data.frame(Gene = rownames(antCor),kTotal = rowSums(antCor))
-beeConn = data.frame(Gene = rownames(beeCor), kTotal = rowSums(beeCor))
-
 ```
 ##4.1 Caste/Behavior bias vs connectivity
 ```{r cbConnPlots,fig.height=6,fig.width=12}
@@ -600,7 +599,7 @@ p4 <- phPlot(cbBps,"behavior","bee")
 grid.arrange(p1,p3,nrow=1)
 grid.arrange(p2,p4,nrow=1)
 ```
-## 4.3 Caste bias vs tissue specificity
+##4.3 Caste bias vs tissue specificity
 tissue specificity is estimated across 12 honey bee tissues.
 ```{r tissue,fig.height=8,fig.width=8}
 bT = merge(tau,beeBias2,by="Gene")

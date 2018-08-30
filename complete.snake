@@ -50,4 +50,8 @@ rule collect_plaid:
 	output: "results/antPlaidGenes.csv","results/beePlaidGenes.csv"
 	shell: "Rscript src/analysis_R/process_plaid.R"
 
+#Calculate connectivity
+rule calcConn:
+	output: "results/antConn.csv","results/beeConn.csv"
+	shell: "Rscript src/analysis_R/getConn.R"
 

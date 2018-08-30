@@ -2,6 +2,10 @@ setwd("~/GitHub/devnetwork/")
 load("results/PlaidResults.RData")
 load("results/collectedPhylo.RData")
 
+modifyDF <- function(data){
+  rownames(data)=data[,1]
+  return(data[!grepl("ERCC",rownames(data)),-c(1)])
+}
 
 beeT <- read.table("data/bees.tpm.txt",header=TRUE)
 antT <- read.table("data/ants.tpm.txt",header=TRUE)
@@ -97,4 +101,5 @@ antGrC = getConn(antT,antG,antTests,antRes)
 
 write.csv(beeGrC,file = "results/beePlaidGenes.csv")
 write.csv(antGrC,file = "results/antPlaidGenes.csv")
+
 
