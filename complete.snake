@@ -44,5 +44,10 @@ rule plaid:
 	output: "results/PlaidResults.RData"
 	shell: "Rscript src/analysis_R/plaid.R"
 
+#Collect plaid results and identify bicluster shared across runs
+rule collect_plaid:
+	input: "results/PlaidResults.RData"
+	output: "results/antPlaidGenes.csv","results/beePlaidGenes.csv"
+	shell: "Rscript src/analysis_R/process_plaid.R"
 
 
