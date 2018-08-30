@@ -7,31 +7,6 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Loading previous results
-```{r loading}
-setwd("~/GitHub/devnetwork/")
-load("results/DEtests.RData")
-load("results/collectedPhylo.RData")
-antPlaid <- read.csv("results/antPlaidGenes.csv")
-beePlaid <- read.csv("results/beePlaidGenes.csv")
-tau <- read.csv("results/bee_tau.csv")
-sexGenes <- read.csv("results/dmel_sexGenes.csv")
-antConn <- read.csv("results/antConnectivity.csv")
-beeConn <- read.csv("results/beeConnectivity.csv")
-
-beeT <- read.table("data/bees.tpm.txt",header=TRUE)
-antT <- read.table("data/ants.tpm.txt",header=TRUE)
-modifyDF <- function(data){
-  rownames(data)=data[,1]
-  return(data[!grepl("ERCC",rownames(data)),-c(1)])
-}
-beeT <- modifyDF(beeT)
-antT <- modifyDF(antT)
-antT = antT[rowSums(antT) > 0,]
-beeT = beeT[rowSums(beeT) > 0,]
-
-```
-
 ## Loading libraries, themes
 ```{r themes,include=FALSE}
 library(cowplot)
@@ -69,6 +44,40 @@ plot2theme <- main_theme + theme(plot.margin = unit(c(0.5,0.5,0.5,0.5),"cm"),
                                  axis.title.x = element_text(margin = margin(t=10,b=0,l=0,r=0)),
                                  axis.title.y = element_text(margin = margin(t=0,b=0,l=0,r=10)))
 ```
+
+
+## Loading previous results
+```{r loading}
+setwd("~/GitHub/devnetwork/")
+load("results/DEtests.RData")
+load("results/collectedPhylo.RData")
+antPlaid <- read.csv("results/antPlaidGenes.csv")
+beePlaid <- read.csv("results/beePlaidGenes.csv")
+tau <- read.csv("results/bee_tau.csv")
+sexGenes <- read.csv("results/dmel_sexGenes.csv")
+antConn <- read.csv("results/antConnectivity.csv")
+beeConn <- read.csv("results/beeConnectivity.csv")
+
+beeT <- read.table("data/bees.tpm.txt",header=TRUE)
+antT <- read.table("data/ants.tpm.txt",header=TRUE)
+modifyDF <- function(data){
+  rownames(data)=data[,1]
+  return(data[!grepl("ERCC",rownames(data)),-c(1)])
+}
+beeT <- modifyDF(beeT)
+antT <- modifyDF(antT)
+antT = antT[rowSums(antT) > 0,]
+beeT = beeT[rowSums(beeT) > 0,]
+
+TGmap <- read.table("phylostratigraphy/out/TGmap_Amel.txt")
+TNmap <- as.data.frame(fread("data/AmelTranName.txt",sep="~",header=FALSE))
+
+AmelName <- merge(TGmap,TNmap,by.x = "V2",by.y = "V1")[,c(2,3)]
+colnames(AmelName) = c("Gene","GeneName")
+AmelName$GeneName = gsub(" isoform X[0-9]","",AmelName$GeneName)
+aName = AmelName[!duplicated(AmelName$Gene),]
+```
+
 ## 0.1 Number of times a gene is queen- and worker-biased across development
 
 ```{r timesDE}
@@ -435,8 +444,36 @@ p
 
 ## 2.1 Bicluster associated with queen abdominal expression
 -Previously performed plaid clustering and extracted genes commonly found in a queen abdomen-specific bicluster.
-```{r bicluster}
+```{r bicluster,fig.width=10,fig.height=6}
+#Find out what the genes are
+antGrC = merge(antPlaid,Aps,by="Gene")
+beeGrC = merge(beePlaid,Bps,by="Gene")
+antGrC$species = "ant"
+beeGrC$species = "bee"
 
+#Make general plot
+allC = rbind(antGrC,beeGrC)
+allC$DEcat = factor(allC$DEcat,levels = c("queen","worker","non-DE"))
+p1 <- ggplot(allC,aes(x = conn,y=-abdomen))+
+  geom_point(aes(fill = DEcat),pch=21,color="black")+
+  scale_fill_manual(values = SexPal[c(1,2,5)],name="DEG type")+
+  scale_alpha_continuous(guide="none")+
+  ylab("abdominal caste bias")+
+  xlab("scaled connectivity in abdominal module")+
+  plot2theme+
+  facet_grid(. ~ species)+
+  theme(panel.spacing = unit(2, "lines"))+
+  guides(fill = guide_legend(override.aes = list(size=4)))+
+  scale_x_log10()+
+  theme(legend.position ="none",
+        legend.text = element_text(size=15),
+        strip.text = element_text(size=22,face="bold"),
+        axis.title.y=element_text(margin=margin(t=0,l=0,r=10,b=0)),
+        legend.title = element_blank(),
+        plot.margin = unit(rep(1,4),"cm"),
+        strip.background = element_rect(color=NA,fill=NA))
+
+p1
 ```
 
 ## 3.1 Comparing caste bias to sex bias
