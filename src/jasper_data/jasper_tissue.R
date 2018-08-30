@@ -9,26 +9,25 @@ rownames(fpkm) = fpkm$gene_id
 fpkm = fpkm[,-c(1)]
 fpkm = fpkm[rowSums(fpkm) > 0,]
 
-calculatetauSoc <- function(factor,expr){
-  factor$stc = as.factor(apply(factor[,c(2,3,5)],1,paste,collapse="_"))
-  meanExpr <- lapply(levels(factor$stc),function(x) 
-    rowSums(as.data.frame(expr[,colnames(expr) %in% factor$sample[factor$stc==x]]))/sum(factor$stc==x))
+calculateTau <- function(factor,expr){
+  meanExpr <- lapply(levels(factor$tissue),function(x) 
+    rowSums(as.data.frame(expr[,colnames(expr) %in% factor$SRA[factor$tissue==x]]))/sum(factor$tissue==x))
   meanExpr <- as.data.frame(do.call(cbind,meanExpr))
-  colnames(meanExpr) = levels(factor$stc)
+  colnames(meanExpr) = levels(factor$sample)
   geneDeviation = apply(meanExpr,1,function(x){
     sum(ldply(lapply(c(1:12),function(i) 1-x[i]/max(x))))
   })
   
-  tau = geneDeviation/(length(levels(factor$stc))-1)
+  tau = geneDeviation/(length(levels(factor$tissue))-1)
   
   return(list(tau,meanExpr))
 }
 
-antTau = calculatetauSoc(factorA,antT[rowSums(antT) > 0,])
-beeTau = calculatetauSoc(factorB,beeT[rowSums(beeT) > 0,])
+beeTau = calculateTau(samples,fpkm)
 
-save(beeTau,antTau,file = "../results/tau_results.RData")
+tau <- data.frame(Gene = names(beeTau[[1]]),tau=tau)
 
+write.csv(tau,file = "../results/bee_tau.csv")
 # 
 # TGmap <- read.table("../phylostratigraphy/out/TGmap_Amel.txt")
 # TNmap <- as.data.frame(fread("../data/AmelTranName.txt",sep="~",header=FALSE))
