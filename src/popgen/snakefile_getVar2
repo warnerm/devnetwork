@@ -17,7 +17,7 @@ PLATYPUS = "/home/warnerm/local_install/Platypus_0.8.1/Platypus.py"
 CALLER=["samtools", "platypus"]
 
 rule all:
-	input: "../var/final.recode.vcf"
+	input: "../var/snpEff.txt"
 
 rule makeBED:
 	input: GFF
@@ -92,6 +92,12 @@ rule consensusFilter:
      input: "../var/consensus.vcf","../var/consensus.vcf.pos"
      output: "../var/final.recode.vcf"
      shell: "vcftools --vcf {input[0]} --positions {input[1]} --max-alleles 2 --remove-indels --max-missing 0.9 --recode --mac 1 --out  ../var/final"
+
+# estimate SNP effects
+rule snpEff:
+	input: rules.consensusFilter.output
+	output: "../var/snpEff.txt"
+	shell: "java -Xmx7g -jar /home/warnerm/local_install/snpEff/snpEff.jar -no-utr -no-upstream -no-intron -no-intergenic -no-downstream a_mellifera {input} >  {output}"
 
 rule getCDS:
 	input: GFF, REF
