@@ -17,7 +17,7 @@ PLATYPUS = "/home/warnerm/local_install/Platypus_0.8.1/Platypus.py"
 CALLER=["samtools", "platypus"]
 
 rule all:
-	input: "../var/consensus.vcf.pos"
+	input: "../var/final.recode.vcf"
 
 rule makeBED:
 	input: GFF
@@ -86,6 +86,12 @@ rule BAYSIC:
 	run: 
 		infiles = "".join([" --vcf " + i for i in input])
 		shell("perl baysic.pl --statsOutFile ../var/combined.stats --pvalCutoff 0.8 {} --countsOutFile ../var/combined.cts --vcfOutFile ../var/consensus.vcf".format(infiles))
+
+# select bi-allelic consensus sites
+rule consensusFilter:
+     input: "../var/consensus.vcf","../var/consensus.vcf.pos"
+     output: "../var/final.recode.vcf"
+     shell: "vcftools --vcf {input[0]} --positions {input[1]} --remove-indv Pelegans  --max-alleles 2 --remove-indels --max-missing 0.9 --recode --mac 1 --out  ../var/final"
 
 
 
