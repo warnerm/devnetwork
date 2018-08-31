@@ -1,6 +1,8 @@
 setwd("~/GitHub/devnetwork/")
 load("results/PlaidResults.RData")
 load("results/collectedPhylo.RData")
+library(magrittr)
+
 
 modifyDF <- function(data){
   rownames(data)=data[,1]
@@ -18,7 +20,7 @@ beeT = beeT[rowSums(beeT) > 0,]
 factorA <- genFactor(ant)
 factorB <- genFactor(bee)
 
-idQG <- function(data,maxMod,factor,tpm){
+freq_set <- function(data,maxMod,factor,tpm,type){
   res <- lapply(data,function(x){
     checkMod = seq(1:nrow(x@NumberxCol))[rowSums(x@NumberxCol) <= maxMod]
     r = list()
@@ -26,7 +28,7 @@ idQG <- function(data,maxMod,factor,tpm){
     for (mod in checkMod){
       qp = x@NumberxCol
       samp = factor$sample[x@NumberxCol[mod,]]
-      if (sum(grepl("QG",samp))==3){
+      if (sum(grepl(type,samp))==3){
         modI = modI+1
         genes = rownames(tpm)[x@RowxNumber[,mod]]
         r[[modI]]=list(samples=samp,genes=genes)
@@ -42,23 +44,12 @@ idQG <- function(data,maxMod,factor,tpm){
   return(res)
 }
 
-freq_all <- function(data,maxMod,factor,tpm){
-  res <- lapply(data,function(x){
-    checkMod = seq(1:nrow(x@NumberxCol))[rowSums(x@NumberxCol) <= maxMod]
-    r = list()
-    modI = 0
-    for (mod in checkMod){
-      qp = x@NumberxCol
-      samp = factor$sample[x@NumberxCol[mod,]]
-      if (sum(grepl("QG",samp))==3){
-        modI = modI+1
-        genes = rownames(tpm)[x@RowxNumber[,mod]]
-        r[[modI]]=list(samples=samp,genes=genes)
-      }
-    }
-    return(r)
+#Calculate number of significant biclusters for a given set
+num_set <- function(set){
+  nums = lapply(names(set),function(x){
+    length(set[[x]][lapply(set[[x]],length) > 0])
   })
-  return(res)
+  numDF = data.frame(Type = names(set),Freq=unlist(nums))
 }
 
 commonGenes <- function(QGres,tpm){
@@ -74,8 +65,22 @@ commonGenes <- function(QGres,tpm){
   return(df)
 }
 
-antQG <- idQG(antPl,6,factorA,antT)
-beeQG <- idQG(beePl,6,factorB,beeT)
+samp_types = sapply(factorA$sample,function(x) gsub(".*_","",x) %>% gsub("\\.[0-9]","",.)) %>%
+  unique()
+
+#Output significant biclusters for each sample type
+type_bicAmel <- lapply(samp_types,function(x) freq_set(beePl,6,factorB,beeT,x))
+type_bicMphar <- lapply(samp_types,function(x) freq_set(antPl,6,factorA,antT,x))
+names(type_bicAmel) = names(type_bicMphar) = samp_types
+typeNum_Amel = num_set(type_bicAmel)
+typeNum_Mphar = num_set(type_bicMphar)
+
+
+antQG <- type_bicMphar[["AQG"]]
+beeQG <- type_bicAmel[["AQG"]]
+antQG = antQG[lapply(antQG,length) > 0]
+beeQG = beeQG[lapply(beeQG,length) > 0]
+
 aG <- commonGenes(antQG,antT)
 bG <- commonGenes(beeQG,beeT)
 antG = aG$Gene[aG$KeepNum > 0.6] #Keep genes occurring greater than 60% of the time. Note that there appear to be two peaks in the bee data
