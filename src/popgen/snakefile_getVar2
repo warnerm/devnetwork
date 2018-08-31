@@ -53,14 +53,8 @@ rule makeDict:
 
 rule samtools:
 	input: BAMs = expand("../temp/alignments/africa_cerana/{sample}.bam",sample=SAMPLES),bed = "../ref/exons.bed"
-	output: protected("../temp/samtools.vcf")
+	output: protected("../var/samtools.vcf")
 	shell: "samtools mpileup -l {input[bed]} -ugf {REF} {input[BAMs]} | bcftools call -vc - | vcfutils.pl varFilter -D 500 > {output}"
-
-#removes indels, which are causing a problem with allelic primatives
-rule rmIndel_samtools:
-	input: "../temp/samtools.vcf"
-	output: "../var/samtools.vcf"
-	shell: "vcftools --vcf {input} --remove-indels --out {output}"
 
 
 rule platypus:
@@ -69,14 +63,25 @@ rule platypus:
 	params: files = ",".join(expand("../temp/alignments/africa_cerana/{sample}.bam",sample=SAMPLES))
 	shell: "python2.7 {PLATYPUS} callVariants --nCPU={THREADS} --refFile={REF} --bamFiles={params.files} --output={output} --maxReads=25000000 --regions=../ref/exons.bed"
 
-rule allelicPrimitives:
+#remove insertions and deletions
+rule rmIndel:
 	input: "../var/{VCFcaller}.vcf"
-	output: "../var/{VCFcaller}.primatives.vcf"
+	output: "../var/{VCFcaller}.snp.recode.vcf"
+	shell: "vcftools --vcf {input} --remove-indels --out ../var/{wildcards.VCFcaller}.snp --recode --recode-INFO-all"
+
+rule allelicPrimitives:
+	input: "../var/{VCFcaller}.snp.recode.vcf"
+	output: "../var/{VCFcaller}.snp.primatives.vcf"
 	shell: "cat {input} | vcfallelicprimitives -kg > {output}"
+
+rule vcfSort:
+	input: "../var/{VCFcaller}.snp.primatives.vcf"
+	output: "../var/{VCFcaller}.snp.primatives.sorted.vcf"
+	shell: "vcf-sort {input} > {output}"
 
 # generate consensus SNP calls
 rule BAYSIC: 	
-	input: expand("../var/{VCFcaller}.primatives.vcf", VCFcaller=CALLER)
+	input: expand("../var/{VCFcaller}.snp.primatives.sorted.vcf", VCFcaller=CALLER)
 	output: "../var/consensus.vcf.pos"
 	run: 
 		infiles = "".join([" --vcf " + i for i in input])
