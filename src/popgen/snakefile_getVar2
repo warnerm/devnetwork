@@ -91,8 +91,16 @@ rule BAYSIC:
 rule consensusFilter:
      input: "../var/consensus.vcf","../var/consensus.vcf.pos"
      output: "../var/final.recode.vcf"
-     shell: "vcftools --vcf {input[0]} --positions {input[1]} --remove-indv Pelegans  --max-alleles 2 --remove-indels --max-missing 0.9 --recode --mac 1 --out  ../var/final"
+     shell: "vcftools --vcf {input[0]} --positions {input[1]} --max-alleles 2 --remove-indels --max-missing 0.9 --recode --mac 1 --out  ../var/final"
 
+rule getCDS:
+	input: GFF, REF
+	output: "../ref/cds.fa"
+	shell: "gffread {input[0]} -g {input[1]} -x {output}"
 
+rule filterLongest:
+	input: rules.getCDS.output
+	output: "../ref/longest.fa"
+	shell: "python filter_longest.py {input} > {output}"
 
 
