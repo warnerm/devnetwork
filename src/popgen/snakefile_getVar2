@@ -15,10 +15,11 @@ REF = "../ref/GCF_000002195.4_Amel_4.5_genomic.fna"
 GFF = "../ref/GCF_000002195.4_Amel_4.5_genomic.gff"
 THREADS = 20
 PLATYPUS = "/home/warnerm/local_install/Platypus_0.8.1/Platypus.py"
-CALLER=["samtools", "platypus","freebayes"]
+CALLER=["samtools", "platypus"]
+
 
 rule all:
-	input: "../var/snps.csv"
+	input: "../var/annotation.csv"
 
 rule makeBED:
 	input: GFF
@@ -39,11 +40,11 @@ rule PicardGroups:
 
 #'-=' means report genome qualities, the params makes a list of input files, min-alternate-count sets minimum number of chromosomes sampled to consider an allele
 #Using target= exons.bed because we only want to call variants for exons
-rule freeBayes:
-	input: expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES),bed = "../ref/exons.bed"
-	output: "../var/freebayes.vcf"
-	params: files = "-b " + " -b ".join(expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES))
-	shell: "freebayes -= {params.files} -v {output} -f {REF} --min-alternate-count 4 --use-best-n-alleles 3 --targets ../ref/exons.bed"
+#rule freeBayes:
+#	input: expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES),bed = "../ref/exons.bed"
+#	output: "../var/freebayes.vcf"
+#	params: files = "-b " + " -b ".join(expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES))
+#	shell: "freebayes -= {params.files} -v {output} -f {REF} --min-alternate-count 4 --use-best-n-alleles 3 --targets ../ref/exons.bed"
 
 #rule GATK:
 #	input: expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES),bed = "../ref/exons.bed",dict="../ref/GCF_000002195.4_Amel_4.5_genomic.dict"
@@ -92,11 +93,11 @@ rule BAYSIC:
 	output: "../var/consensus.vcf.pos","../var/consensus.vcf"
 	run: 
 		infiles = "".join([" --vcf " + i for i in input])
-		shell("perl baysic.pl --statsOutFile ../var/combined.stats --pvalCutoff 0.8 {} --countsOutFile ../var/combined.cts --vcfOutFile {output[1}".format(infiles))
+		shell("perl baysic.pl --statsOutFile ../var/combined.stats --pvalCutoff 0.8 {} --countsOutFile ../var/combined.cts --vcfOutFile ../var/consensus.vcf".format(infiles))
 
 # select bi-allelic consensus sites
 rule consensusFilter:
-     input: "../var/consensus.vcf","../var/consensus.vcf.pos"
+     input: "../var/platypus.vcf","../var/consensus.vcf.pos"
      output: "../var/final.recode.vcf"
      shell: "vcftools --vcf {input[0]} --positions {input[1]} --max-alleles 2 --remove-indels --max-missing 0.9 --recode --mac 1 --out  ../var/final"
 
@@ -124,5 +125,15 @@ rule filterLongest:
 	input: rules.getCDS.output
 	output: "../ref/longest.fa"
 	shell: "python filter_longest.py {input} > {output}"
+
+# exports silent and replacement sites from snpEff
+rule parseSilentReplacement:
+	input: rules.filterLongest.output, rules.snpEff.output
+	output: "../var/annotation.csv"
+	shell: "python2.7 parse_silentReplacement.py {input} > {output}"
+
+
+
+
 
 
