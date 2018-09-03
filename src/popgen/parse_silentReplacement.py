@@ -17,7 +17,7 @@ def isoform_edit(isoform):
         #ignore non-longest isoforms
         if isoName not in isoforms:
             # pdb.set_trace()
-            continue
+            return
         # use effect to estim
         if isoform[2] == "LOW" or isoform[2] == "NONE":
             effect = "S"
