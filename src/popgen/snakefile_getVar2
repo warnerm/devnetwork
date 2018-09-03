@@ -39,11 +39,11 @@ rule PicardGroups:
 
 #'-=' means report genome qualities, the params makes a list of input files, min-alternate-count sets minimum number of chromosomes sampled to consider an allele
 #Using target= exons.bed because we only want to call variants for exons
-rule freeBayes:
-	input: expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES),bed = "../ref/exons.bed"
-	output: "../var/freebayes.vcf"
-	params: files = "-b " + " -b ".join(expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES))
-	shell: "freebayes -= {params.files} -v {output} -f {REF} --min-alternate-count 4 --use-best-n-alleles 3 --targets ../ref/exons.bed"
+#rule freeBayes:
+#	input: expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES),bed = "../ref/exons.bed"
+#	output: "../var/freebayes.vcf"
+#	params: files = "-b " + " -b ".join(expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES))
+#	shell: "freebayes -= {params.files} -v {output} -f {REF} --min-alternate-count 4 --use-best-n-alleles 3 --targets ../ref/exons.bed"
 
 #rule GATK:
 #	input: expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES),bed = "../ref/exons.bed",dict="../ref/GCF_000002195.4_Amel_4.5_genomic.dict"
