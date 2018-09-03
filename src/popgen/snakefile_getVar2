@@ -109,7 +109,7 @@ rule snpEff:
 
 # determine which SNPs are fixed and which are polymorphic
 # for this we remove the outgroup and compute frequencies
-#Apis cerana is SRR957079_RG
+#Apis cerana is SRR957079
 rule fixedPolymorphic:	
 	input: rules.consensusFilter.output
 	output: "../var/snps.csv"
