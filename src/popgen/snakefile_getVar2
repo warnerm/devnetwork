@@ -19,7 +19,7 @@ CALLER=["samtools", "platypus"]
 
 
 rule all:
-	input: "../var/snps.csv","../var/snpEff.txt"
+	input: "../var/annotation.csv"
 
 rule makeBED:
 	input: GFF
@@ -125,5 +125,15 @@ rule filterLongest:
 	input: rules.getCDS.output
 	output: "../ref/longest.fa"
 	shell: "python filter_longest.py {input} > {output}"
+
+# exports silent and replacement sites from snpEff
+rule parseSilentReplacement:
+	input: rules.filterLongest.output, rules.snpEff.output
+	output: "../var/annotation.csv"
+	shell: "python2.7 parse_silentReplacement.py {input} > {output}"
+
+
+
+
 
 
