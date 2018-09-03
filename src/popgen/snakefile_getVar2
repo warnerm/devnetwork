@@ -15,7 +15,7 @@ REF = "../ref/GCF_000002195.4_Amel_4.5_genomic.fna"
 GFF = "../ref/GCF_000002195.4_Amel_4.5_genomic.gff"
 THREADS = 20
 PLATYPUS = "/home/warnerm/local_install/Platypus_0.8.1/Platypus.py"
-CALLER=["samtools", "platypus","freebayes"]
+CALLER=["samtools", "platypus"]
 
 rule all:
 	input: "../var/snps.csv"
