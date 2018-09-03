@@ -13,7 +13,7 @@ PICARD = "/home/warnerm/local_install/picard.jar"
 
 REF = "../ref/GCF_000002195.4_Amel_4.5_genomic.fna"
 GFF = "../ref/GCF_000002195.4_Amel_4.5_genomic.gff"
-THREADS = 1
+THREADS = 20
 PLATYPUS = "/home/warnerm/local_install/Platypus_0.8.1/Platypus.py"
 CALLER=["freebayes"]
 
@@ -53,6 +53,7 @@ rule freeBayes:
 	params: 
 		files = "-b " + " -b ".join(expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES)),
 		index = 1:20
+	threads: 20
 	shell: "freebayes -= {params.files} -v {output} -f {REF} --min-alternate-count 4 --use-best-n-alleles 3 --targets ../ref/subEx_{params.index}.bed"
 
 rule mergeFB:
