@@ -19,7 +19,7 @@ CALLER=["samtools", "platypus"]
 
 
 rule all:
-	input: "../out/apis.sites.pi"
+	input: "../out/apis.gene.pi.csv"
 
 rule makeBED:
 	input: GFF
@@ -154,6 +154,12 @@ rule calcPi:
 	input: rules.consensusFilter.output
 	output: "../out/apis.sites.pi"
 	shell: "vcftools --vcf {input} --site-pi --remove-indv SRR957079 --out ../out/apis"
+
+#Calculate gene-wise pi
+rule genePi:
+	input: rules.parseSilentReplacement.output,rules.calcPi.output
+	output: "../out/apis.gene.pi.csv"
+	shell: "Rscript --vanilla pi_per_gene.R {input} {output}"
 
 
 
