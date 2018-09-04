@@ -53,7 +53,7 @@ rule subset_exons:
 #Using target= exons.bed because we only want to call variants for exons
 rule freeBayes:
 	input: expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES),rules.subset_exons.output
-	output: expand("../var/fb_{index}.vcf",index=INDEX)
+	output: expand("../var/fb_{i}.vcf",i=range(20))
 	params: 
 		files = "-b " + " -b ".join(expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES)),
 	threads: 20
