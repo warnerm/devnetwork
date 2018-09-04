@@ -19,7 +19,7 @@ CALLER=["samtools", "platypus"]
 
 
 rule all:
-	input: "../var/annotation.csv"
+	input: "../out/substitutions"
 
 rule makeBED:
 	input: GFF
@@ -132,8 +132,16 @@ rule parseSilentReplacement:
 	output: "../var/annotation.csv"
 	shell: "python2.7 parse_silentReplacement.py {input} > {output}"
 
+#Tabulate substitutions
+rule tab_subs:
+	input: rules.parseSilentReplacement,rules.fixedPolymorphic
+	output: "../out/substitutions.csv"
+	shell: "Rscript --vanilla tabulate_substitutions.R {input} {output}"
 
-
+#rule snipre:
+#	input: rules.silentReplacement.output, rules.fixedPolymorphic.output, rules.parseSilentReplacement.output
+#	output: "../out/bayesian_results.csv"
+#	shell: "Rscript --vanilla snipre.R"
 
 
 
