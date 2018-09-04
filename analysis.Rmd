@@ -454,6 +454,8 @@ beeGrC$species = "bee"
 #Make general plot
 allC = rbind(antGrC,beeGrC)
 allC$DEcat = factor(allC$DEcat,levels = c("queen","worker","non-DE"))
+
+#Note -abdomen because we want queen genes to be upregulated
 p1 <- ggplot(allC,aes(x = conn,y=-abdomen))+
   geom_point(aes(fill = DEcat),pch=21,color="black")+
   scale_fill_manual(values = SexPal[c(1,2,5)],name="DEG type")+
@@ -474,6 +476,34 @@ p1 <- ggplot(allC,aes(x = conn,y=-abdomen))+
         strip.background = element_rect(color=NA,fill=NA))
 
 p1
+```
+
+## 2.2 Specific genes within the bicluster
+- holding off plotting specific genes for now
+```{r bicGenes}
+beeAnn <- read.csv("data/Amel_Gene_Names.csv")
+ann <- read.csv("data/MpharAnn.csv")
+
+#Pick genes with connectivity in the top 90% that are four-fold upregulated in queens
+antGenes = antGrC$Gene[antGrC$conn > quantile(antGrC$conn,0.9) &
+                         antGrC$abdomen < -2]
+beeGenes = beeGrC$Gene[beeGrC$conn > quantile(beeGrC$conn,0.9) &
+                         beeGrC$abdomen < -2]
+annSwiss = ann$SwissProt[ann$Gene %in% antGenes]
+beeSwiss = beeAnn$GeneName[beeAnn$Gene %in% beeGenes]
+beeSwiss[!grepl("ncharacterized",beeSwiss) & beeSwiss!="-"]
+```
+
+**ant Genes**
+
+```{r antG}
+annSwiss[!grepl("ncharacterized",annSwiss) & annSwiss!="-"]
+```
+
+**bee Genes**
+
+```{r beeG}
+beeSwiss[!grepl("ncharacterized",beeSwiss) & beeSwiss!="-"]
 ```
 
 ## 3.1 Comparing caste bias to sex bias
