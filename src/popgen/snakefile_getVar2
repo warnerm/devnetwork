@@ -19,7 +19,7 @@ CALLER=["samtools", "platypus"]
 
 
 rule all:
-	input: "../out/substitutions.csv"
+	input: "../out/apis.sites.pi"
 
 rule makeBED:
 	input: GFF
@@ -142,6 +142,18 @@ rule tab_subs:
 #	input: rules.silentReplacement.output, rules.fixedPolymorphic.output, rules.parseSilentReplacement.output
 #	output: "../out/bayesian_results.csv"
 #	shell: "Rscript --vanilla snipre.R"
+
+#Calculate constraint from MKtest
+#rule MKtest_constraint:
+#	input: "../out/substitutions.csv"
+#	output: "../out/MKtest_out"
+#	shell: "Mktest -a 1 -f 2 -o {output} {input}"
+
+#Calculate pi within honeybee population
+rule calcPi:
+	input: rules.consensusFilter.output
+	output: "../out/apis.sites.pi"
+	shell: "vcftools --vcf {input} --site-pi --remove-indv SRR957079 --out ../out/apis"
 
 
 
