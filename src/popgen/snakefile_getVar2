@@ -15,11 +15,12 @@ REF = "../ref/GCF_000002195.4_Amel_4.5_genomic.fna"
 GFF = "../ref/GCF_000002195.4_Amel_4.5_genomic.gff"
 THREADS = 20
 PLATYPUS = "/home/warnerm/local_install/Platypus_0.8.1/Platypus.py"
-CALLER=["samtools", "platypus"]
+CALLER=["samtools", "platypus","freebayes"]
 
 
 rule all:
-	input: "../out/apis.gene.pi.csv"
+	input: "../var/snps.csv",expand("../var/{caller}.vcf",caller=CALLER)
+
 
 rule makeBED:
 	input: GFF
@@ -38,13 +39,30 @@ rule PicardGroups:
 	shell: """java -jar {PICARD} AddOrReplaceReadGroups I={input} O={output} SORT_ORDER=coordinate \
 				CREATE_INDEX=true RGPL=illumina RGID={wildcards.sampled} RGSM={wildcards.sample} RGLB=lib1 RGPU=unit1"""
 
+
+#Split up targets to run freebayes and gatk in parallel
+rule subset_exons:
+	input: "../ref/exons.bed"
+	output: expand("../ref/subEx_{i}.bed",i=range(20))
+	run:
+		for i in range(20):
+			f = output[i]
+			numL = 11610*(i+1)
+			shell("head -n {numL} {input} | tail -n 11610 > {f}")
+
 #'-=' means report genome qualities, the params makes a list of input files, min-alternate-count sets minimum number of chromosomes sampled to consider an allele
 #Using target= exons.bed because we only want to call variants for exons
-#rule freeBayes:
-#	input: expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES),bed = "../ref/exons.bed"
-#	output: "../var/freebayes.vcf"
-#	params: files = "-b " + " -b ".join(expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES))
-#	shell: "freebayes -= {params.files} -v {output} -f {REF} --min-alternate-count 4 --use-best-n-alleles 3 --targets ../ref/exons.bed"
+rule freeBayes:
+	input: expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES),bed="../ref/subEx_{i}.bed"
+	output: "../var/fb_{i}.vcf"
+	params: 
+		files = "-b " + " -b ".join(expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES)),
+	shell: "freebayes -= {params.files} -v {output} -f {REF} --min-alternate-count 4 --use-best-n-alleles 3 --targets {input[bed]}"
+
+rule mergeFB:
+	input: expand("../var/fb_{i}.vcf",i=range(20))
+	output: "../var/freebayes.vcf"
+	shell: "cat {input} > {output}"
 
 #rule GATK:
 #	input: expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES),bed = "../ref/exons.bed",dict="../ref/GCF_000002195.4_Amel_4.5_genomic.dict"
