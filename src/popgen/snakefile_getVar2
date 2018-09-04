@@ -16,6 +16,7 @@ GFF = "../ref/GCF_000002195.4_Amel_4.5_genomic.gff"
 THREADS = 20
 PLATYPUS = "/home/warnerm/local_install/Platypus_0.8.1/Platypus.py"
 CALLER=["freebayes"]
+INDEX = [0,1,2,3]
 
 rule all:
 	input: "../var/freebayes.vcf"
@@ -41,20 +42,25 @@ rule PicardGroups:
 #Split up targets to run freebayes and gatk in parallel
 rule subset_exons:
 	input: "../ref/exons.bed"
-	output: expand("../ref/subEx_{index}.bed",index=1:20)
-	params: index = 1:20
-	shell: "head -n $(eval 11610 \* {params.index}) | tail -n 11610 > {output}"
+	output: expand("../ref/subEx_{i}.bed",i=range(20))
+	run:
+		for i in range(20):
+			f = output[i]
+			numL = 11610*(i+1)
+			shell("head -n {numL} {input} | tail -n 11610 > {f}")
 
 #'-=' means report genome qualities, the params makes a list of input files, min-alternate-count sets minimum number of chromosomes sampled to consider an allele
 #Using target= exons.bed because we only want to call variants for exons
 rule freeBayes:
 	input: expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES),rules.subset_exons.output
-	output: expand("../var/fb_{index}.vcf",index=1:20)
+	output: expand("../var/fb_{index}.vcf",index=INDEX)
 	params: 
 		files = "-b " + " -b ".join(expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES)),
-		index = 1:20
 	threads: 20
-	shell: "freebayes -= {params.files} -v {output} -f {REF} --min-alternate-count 4 --use-best-n-alleles 3 --targets ../ref/subEx_{params.index}.bed"
+	run:
+		for i in range(20):
+			f = output[i]
+			shell("freebayes -= {params.files} -v {f} -f {REF} --min-alternate-count 4 --use-best-n-alleles 3 --targets ../ref/subEx_$i.bed")
 
 rule mergeFB:
 	input: rules.freeBayes.output
