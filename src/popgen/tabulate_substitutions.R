@@ -15,4 +15,4 @@ summed <- ddply(df,~V4,summarize,
                 PN = sum(V3.x=="N" & V3.y == "P"),
                 PS = sum(V3.x=="S" & V3.y == "P"))
 colnames(summed)[1] = "Gene"
-write.csv(summed,file=args[3])
+write.csv(summed,file=args[3],row.names = FALSE)

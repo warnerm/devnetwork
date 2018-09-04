@@ -19,7 +19,7 @@ CALLER=["samtools", "platypus"]
 
 
 rule all:
-	input: "../out/substitutions"
+	input: "../out/substitutions.csv"
 
 rule makeBED:
 	input: GFF
@@ -134,7 +134,7 @@ rule parseSilentReplacement:
 
 #Tabulate substitutions
 rule tab_subs:
-	input: rules.parseSilentReplacement,rules.fixedPolymorphic
+	input: rules.parseSilentReplacement.output,rules.fixedPolymorphic.output
 	output: "../out/substitutions.csv"
 	shell: "Rscript --vanilla tabulate_substitutions.R {input} {output}"
 
