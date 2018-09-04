@@ -16,10 +16,9 @@ GFF = "../ref/GCF_000002195.4_Amel_4.5_genomic.gff"
 THREADS = 20
 PLATYPUS = "/home/warnerm/local_install/Platypus_0.8.1/Platypus.py"
 CALLER=["freebayes"]
-INDEX = [0,1,2,3]
 
 rule all:
-	input: "../var/freebayes.vcf"
+	input:  "../var/freebayes.vcf"
 
 rule makeBED:
 	input: GFF
@@ -52,20 +51,16 @@ rule subset_exons:
 #'-=' means report genome qualities, the params makes a list of input files, min-alternate-count sets minimum number of chromosomes sampled to consider an allele
 #Using target= exons.bed because we only want to call variants for exons
 rule freeBayes:
-	input: expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES),rules.subset_exons.output
-	output: expand("../var/fb_{i}.vcf",i=range(20))
+	input: expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES),bed="../ref/subEx_{i}.bed"
+	output: "../var/fb_{i}.vcf"
 	params: 
 		files = "-b " + " -b ".join(expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES)),
-	threads: 20
-	run:
-		for i in range(20):
-			f = output[i]
-			shell("freebayes -= {params.files} -v {f} -f {REF} --min-alternate-count 4 --use-best-n-alleles 3 --targets ../ref/subEx_$i.bed")
+	shell: "freebayes -= {params.files} -v {output} -f {REF} --min-alternate-count 4 --use-best-n-alleles 3 --targets {input[bed]}"
 
 rule mergeFB:
-	input: rules.freeBayes.output
+	input: expand("../var/fb_{i}.vcf",i=range(20))
 	output: "../var/freebayes.vcf"
-	shell: "cat ../var/fb*vcf > {output}"
+	shell: "cat {input} > {output}"
 
 #rule GATK:
 #	input: expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES),bed = "../ref/exons.bed",dict="../ref/GCF_000002195.4_Amel_4.5_genomic.dict"
