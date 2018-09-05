@@ -15,11 +15,11 @@ REF = "../ref/GCF_000002195.4_Amel_4.5_genomic.fna"
 GFF = "../ref/GCF_000002195.4_Amel_4.5_genomic.gff"
 THREADS = 20
 PLATYPUS = "/home/warnerm/local_install/Platypus_0.8.1/Platypus.py"
-CALLER=["samtools", "platypus","freebayes"]
+CALLER=["GATK"]
 
 
 rule all:
-	input: "../var/snps.csv",expand("../var/{caller}.vcf",caller=CALLER)
+	input: "../var/GATK.vcf"
 
 
 rule makeBED:
@@ -64,18 +64,36 @@ rule mergeFB:
 	output: "../var/freebayes.vcf"
 	shell: "cat {input} > {output}"
 
-#rule GATK:
-#	input: expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES),bed = "../ref/exons.bed",dict="../ref/GCF_000002195.4_Amel_4.5_genomic.dict"
-#	output: protected("../var/GATK.vcf")
-#	params: files = "-I " + " -I ".join(expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES))
-#	shell: """export PATH=~/local_install/jdk1.8.0_05/bin:$PATH; gatk --java-options "-Xmx30g" HaplotypeCaller \
-#				-R {REF} \
-#				{params.files} \
-#				-O {output} \
-#				-L ../ref/exons.bed \
-#				--heterozygosity 0.002 \
-#				--mbq 20 \
-#				--max-alternate-alleles 4"""
+#Just get first three columns of bed files
+rule editBed:
+	input: "../ref/subEx_{i}.bed"
+	output: "../ref/subEx_{i}_edit.bed"
+	shell: """cat {input} | awk '{{print$1"\t"$2"\t"$3}}' > {output}"""
+
+#Convert bed files to interval lists for gatk
+rule intervalList:
+	input: "../ref/subEx_{i}_edit.bed"
+	output: "../ref/subEx_{i}.interval_list"
+	shell: """export PATH=~/local_install/jdk1.8.0_05/bin:$PATH; java -jar {PICARD} BedToIntervalList I={input} O={output} SD=../ref/GCF_000002195.4_Amel_4.5_genomic.dict"""
+
+rule GATK:
+	input: expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES),intervals= "../ref/subEx_{i}.interval_list"
+	output: "../var/gatk_{i}.vcf"
+	params: files = "-I " + " -I ".join(expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES))
+	shell: """export PATH=~/local_install/jdk1.8.0_05/bin:$PATH; gatk --java-options "-Xmx30g" HaplotypeCaller \
+				-R {REF} \
+				{params.files} \
+				-O {output} \
+				-L {input[intervals]} \
+				--heterozygosity 0.002 \
+				--mbq 20 \
+				--max-alternate-alleles 4"""
+
+
+rule mergeGATK:
+	input: expand("../var/gatk_{i}.vcf",i=range(20))
+	output: "../var/GATK.vcf"
+	shell: "cat {input} > {output}"
 
 rule samtools:
 	input: BAMs = expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES),bed = "../ref/exons.bed"
