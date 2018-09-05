@@ -28,6 +28,3 @@ colnames(mkInput) = NULL
 mkInput = cbind(mkInput,rep(22,nrow(mkInput)))
 
 write.table(mkInput,file=args[5],sep=",",row.names=FALSE,col.names=FALSE)
-
-
-
