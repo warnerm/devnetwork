@@ -15,11 +15,11 @@ REF = "../ref/GCF_000002195.4_Amel_4.5_genomic.fna"
 GFF = "../ref/GCF_000002195.4_Amel_4.5_genomic.gff"
 THREADS = 20
 PLATYPUS = "/home/warnerm/local_install/Platypus_0.8.1/Platypus.py"
-CALLER=["GATK"]
+CALLER=["freebayes","platypus","samtools"]
 
 
 rule all:
-	input: "../var/GATK.vcf"
+	input: "../var/freebayes.vcf"
 
 
 rule makeBED:
@@ -62,7 +62,7 @@ rule freeBayes:
 rule mergeFB:
 	input: expand("../var/fb_{i}.vcf",i=range(20))
 	output: "../var/freebayes.vcf"
-	shell: "cat {input} > {output}"
+	shell: "vcf-concat {input} > {output}"
 
 #Just get first three columns of bed files
 rule editBed:
@@ -93,7 +93,7 @@ rule GATK:
 rule mergeGATK:
 	input: expand("../var/gatk_{i}.vcf",i=range(20))
 	output: "../var/GATK.vcf"
-	shell: "cat {input} > {output}"
+	shell: "vcf-concat {input} > {output}"
 
 rule samtools:
 	input: BAMs = expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES),bed = "../ref/exons.bed"
