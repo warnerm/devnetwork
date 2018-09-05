@@ -491,7 +491,6 @@ beeGenes = beeGrC$Gene[beeGrC$conn > quantile(beeGrC$conn,0.9) &
                          beeGrC$abdomen < -2]
 annSwiss = ann$SwissProt[ann$Gene %in% antGenes]
 beeSwiss = beeAnn$GeneName[beeAnn$Gene %in% beeGenes]
-beeSwiss[!grepl("ncharacterized",beeSwiss) & beeSwiss!="-"]
 ```
 
 **ant Genes**
