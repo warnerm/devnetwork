@@ -27,7 +27,7 @@ mkInput <- summed[,c(2,6,4,6,3,7,5,7)]
 colnames(mkInput) = NULL
 mkInput = cbind(mkInput,rep(22,nrow(mkInput)))
 
-write.csv(mkInput,file=args[5],row.names=FALSE)
+write.table(mkInput,file=args[5],sep=",",row.names=FALSE,col.names=FALSE)
 
 
 

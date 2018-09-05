@@ -189,7 +189,7 @@ rule tab_subs:
 rule MKtest_constraint:
 	input: "../out/Mkinput.csv"
 	output: "../out/MKtest_out"
-	shell: "Mktest -a 1 -f 2 -o {output} {input}"
+	shell: "MKtest -a 1 -f 2 -o {output} {input}"
 
 #Calculate pi within honeybee population
 rule calcPi:
