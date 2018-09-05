@@ -1,3 +1,6 @@
+#!/usr/bin/env Rscript
+args = commandArgs(trailingOnly=TRUE)
+
 library(lme4)
 library(R2jags)
 library(arm)
@@ -10,15 +13,15 @@ source("snipre/my.jags2.R")
 print("Loading data")
 #load data
 
-annotation <- read.csv('../data/popgen/var/annotation.csv',header=F) # read data on mutation effect
+annotation <- read.csv(args[1],header=F) # read data on mutation effect
 colnames(annotation) <- c("chrom", "pos", "effect", "loc", "rna")
 annotation$pos <- paste(annotation$chrom,annotation$pos)
 annotation <- annotation[,-1]
-snps <- read.csv('../data/popgen/var/snps.csv',header=F) # read fixed vs polymorphic
+snps <- read.csv(args[2],header=F) # read fixed vs polymorphic
 colnames(snps) <- c("chrom", "pos", "state")
 snps$pos <- paste(snps$chrom,snps$pos)
 snps <- snps[,-1]
-silentReplacement <- read.csv('../data/popgen/var/silentReplacement.csv', header=T) # read expected silent replacement
+silentReplacement <- read.csv(args[3], header=T) # read expected silent replacement
 
 print("Data loaded")
 byPos <- merge(snps,annotation, by.x="pos", by.y="pos")
