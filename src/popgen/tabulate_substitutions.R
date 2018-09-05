@@ -3,16 +3,31 @@ args = commandArgs(trailingOnly=TRUE)
 
 ann = read.csv(args[1],header=F)
 snps = read.csv(args[2],header=F)
+silR = read.csv(args[3],header=T)
 
 library(plyr)
 
 ann = ann[!duplicated(ann),]
+colnames(ann) = c("CHROM","POS","syn","Gene","transcript")
 snps = snps[!duplicated(snps),]
-df <- merge(ann,snps,by="V2")
-summed <- ddply(df,~V4,summarize,
-                FN = sum(V3.x=="N" & V3.y == "F"),
-                FS = sum(V3.x=="S" & V3.y == "F"),
-                PN = sum(V3.x=="N" & V3.y == "P"),
-                PS = sum(V3.x=="S" & V3.y == "P"))
-colnames(summed)[1] = "Gene"
-write.csv(summed,file=args[3],row.names = FALSE)
+colnames(snps) = c("CHROM","POS","fixed")
+df <- merge(ann,snps,by=c("CHROM","POS"))
+df = merge(df,silR,by.x="Gene",by.y="gene")
+summed <- ddply(df,~Gene,summarize,
+                FN = sum(syn=="N" & fixed == "F"),
+                FS = sum(syn=="S" & fixed == "F"),
+                PN = sum(syn=="N" & fixed == "P"),
+                PS = sum(syn=="S" & fixed == "P"),
+                Trepl=sum(Trepl),
+                Tsil=sum(Tsil))
+
+write.csv(summed,file=args[4],row.names = FALSE)
+
+mkInput <- summed[,c(2,6,4,6,3,7,5,7)]
+colnames(mkInput) = NULL
+mkInput = cbind(mkInput,rep(22,nrow(mkInput)))
+
+write.csv(mkInput,file=args[5],row.names=FALSE)
+
+
+

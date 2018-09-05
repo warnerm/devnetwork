@@ -19,7 +19,7 @@ CALLER=["freebayes","platypus","samtools","GATK"]
 
 
 rule all:
-	input: "../out/substitutions.csv"
+	input: "../out/substitutions.csv","../out/apis.gene.pi.csv","../out/MKtest_out"
 
 
 rule makeBED:
@@ -168,17 +168,17 @@ rule parseSilentReplacement:
 	output: "../var/annotation.csv"
 	shell: "python2.7 parse_silentReplacement.py {input} > {output}"
 
-#Tabulate substitutions
-rule tab_subs:
-	input: rules.parseSilentReplacement.output,rules.fixedPolymorphic.output
-	output: "../out/substitutions.csv"
-	shell: "Rscript --vanilla tabulate_substitutions.R {input} {output}"
-
 # calculate how many synonymous vs_non-synonymous changes are possible
 rule silentReplacement:
 	input: rules.filterLongest.output
 	output: "../var/silentReplacement.csv"
 	shell: "python2.7 silent_replacement.py {input} > {output}"
+
+#Tabulate substitutions
+rule tab_subs:
+	input: rules.parseSilentReplacement.output,rules.fixedPolymorphic.output,rules.silentReplacement.output
+	output: "../out/substitutions.csv","../out/Mkinput.csv"
+	shell: "Rscript --vanilla tabulate_substitutions.R {input} {output}"
 
 #rule snipre:
 #	input: rules.silentReplacement.output, rules.fixedPolymorphic.output, rules.parseSilentReplacement.output
@@ -186,10 +186,10 @@ rule silentReplacement:
 #	shell: "Rscript --vanilla snipre.R"
 
 #Calculate constraint from MKtest
-#rule MKtest_constraint:
-#	input: "../out/substitutions.csv"
-#	output: "../out/MKtest_out"
-#	shell: "Mktest -a 1 -f 2 -o {output} {input}"
+rule MKtest_constraint:
+	input: "../out/Mkinput.csv"
+	output: "../out/MKtest_out"
+	shell: "Mktest -a 1 -f 2 -o {output} {input}"
 
 #Calculate pi within honeybee population
 rule calcPi:
