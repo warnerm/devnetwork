@@ -133,7 +133,7 @@ rule BAYSIC:
 
 # select bi-allelic consensus sites
 rule consensusFilter:
-     input: "../var/platypus.vcf","../var/consensus.vcf.pos"
+     input: "../var/freebayes.snp.primatives.sorted.vcf","../var/consensus.vcf.pos"
      output: "../var/final.recode.vcf"
      shell: "vcftools --vcf {input[0]} --positions {input[1]} --max-alleles 2 --remove-indels --max-missing 0.9 --recode --mac 1 --out  ../var/final"
 
