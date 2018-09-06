@@ -1,0 +1,16 @@
+
+VCFtools - v0.1.13
+(C) Adam Auton and Anthony Marcketta 2009
+
+Parameters as interpreted:
+	--vcf ../var/final.recode.vcf
+	--out ../out/apis
+	--site-pi
+	--remove-indv SRR957079
+
+Excluding individuals in 'exclude' list
+After filtering, kept 11 out of 12 Individuals
+Outputting Per-Site Nucleotide Diversity Statistics...
+	sitePi: Only using fully diploid sites.
+After filtering, kept 762122 out of a possible 762122 Sites
+Run Time = 6.00 seconds
