@@ -182,8 +182,8 @@ rule tab_subs:
 
 rule snipre:
 	input: rules.silentReplacement.output, rules.parseSilentReplacement.output,rules.fixedPolymorphic.output
-	output: "../out/bayesian_results.csv"
-	shell: "Rscript --vanilla snipre.R {input}"
+	output: "../out/bayesian_results_apis.csv"
+	shell: "Rscript --vanilla snipre.R {input} {output}"
 
 #Calculate constraint from MKtest
 rule MKtest_constraint:
