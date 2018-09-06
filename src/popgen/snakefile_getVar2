@@ -204,6 +204,11 @@ rule MKtest_alpha:
 	output: "../out/alpha_globalF_{stage}.{species}.csv"
 	shell: "MKtest -a 4 -f 1 -P 1000 -o {output} {input}"
 
+rule combineMK:
+	input: expand("../out/alpha_globalF_{stage}.{species}.csv",stage=STAGE,species=SPECIES)
+	output: "../out/collectedAlpha.csv"
+	shell: "Rscript combineMK.R {output}"
+
 
 #Calculate pi within honeybee population
 rule calcPi:
