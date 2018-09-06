@@ -16,11 +16,12 @@ GFF = "../ref/GCF_000002195.4_Amel_4.5_genomic.gff"
 THREADS = 20
 PLATYPUS = "/home/warnerm/local_install/Platypus_0.8.1/Platypus.py"
 CALLER=["freebayes","platypus","samtools","GATK"]
+STAGE = ["L2","L3","L4","L5","pupa","head","thorax","abdomen"]
+SPECIES = ["bee","ant"]
 
 
 rule all:
-	input: "../out/substitutions.csv","../out/apis.gene.pi.csv","../out/MKtest_out"
-
+	input: expand("../out/alpha_globalF_{stage}.{species}.csv",stage=STAGE,species=SPECIES)
 
 rule makeBED:
 	input: GFF
@@ -190,6 +191,19 @@ rule MKtest_constraint:
 	input: "../out/Mkinput.csv"
 	output: "../out/MKtest_out"
 	shell: "MKtest -a 1 -f 2 -o {output} {input}"
+
+#Make MKinput files for alpha classes
+rule MKclass_input:
+	input: "../out/Mkinput.csv","../out/substitutions.csv","../data/DEtests.RData","../data/MpharAnn.csv"
+	output: expand("../MK_alpha_input/{stage}.{species}.csv",stage=STAGE,species=SPECIES)
+	shell: "Rscript MKalphaInput.R"
+
+#Bootstrap MKtest for alpha results (class-specific alpha)
+rule MKtest_alpha:
+	input: "../MK_alpha_input/{stage}.{species}.csv"
+	output: "../out/alpha_globalF_{stage}.{species}.csv"
+	shell: "MKtest -a 4 -f 1 -P 100 -o {output} {input}"
+
 
 #Calculate pi within honeybee population
 rule calcPi:
