@@ -202,7 +202,7 @@ rule MKclass_input:
 rule MKtest_alpha:
 	input: "../MK_alpha_input/{stage}.{species}.csv"
 	output: "../out/alpha_globalF_{stage}.{species}.csv"
-	shell: "MKtest -a 4 -f 1 -P 100 -o {output} {input}"
+	shell: "MKtest -a 4 -f 1 -P 1000 -o {output} {input}"
 
 
 #Calculate pi within honeybee population
