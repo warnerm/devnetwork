@@ -1,0 +1,150 @@
+---
+title: "Popgen"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Loading libraries
+```{r libs,include=FALSE,warning=FALSE,message=FALSE}
+
+library(cowplot)
+library(RColorBrewer)
+library(VennDiagram)
+library(plyr)
+library(data.table)
+library(zoo)
+library(reshape2)
+library(EnvStats)
+library(grid)
+library(gridExtra)
+library(extrafont)
+library(magrittr)
+font_import()
+loadfonts()
+
+main_theme=theme_bw()+
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        panel.border = element_rect(size = 1, color = "black",fill = NA),
+        text=element_text(family='Arial'),
+        axis.text = element_text(size=16),
+        axis.title = element_text(size = 22,face="bold"),
+        plot.title = element_text(hjust = 0.5,size=25,face = "bold"),
+        legend.text = element_text(size=16),
+        legend.title = element_text(size = 22))
+
+plot2theme <- main_theme + theme(plot.margin = unit(c(0.5,0.5,0.5,0.5),"cm"),
+                                 axis.title.x = element_text(margin = margin(t=10,b=0,l=0,r=0)),
+                                 axis.title.y = element_text(margin = margin(t=0,b=0,l=0,r=10)))
+```
+
+## Loading previous results
+```{r loading}
+setwd("~/GitHub/devnetwork/")
+load("results/DEtests.RData")
+load("results/collectedPhylo.RData")
+tau <- read.csv("results/bee_tau.csv")
+sexGenes <- read.csv("results/dmel_sexGenes.csv")
+antConn <- read.csv("results/antConnectivity.csv")
+beeConn <- read.csv("results/beeConnectivity.csv")
+beePi <- read.csv("results/apis.gene.pi.csv")
+beeSub <- read.csv("results/substitutions.csv")
+antEvol <- read.csv("data/MpharAnn.csv")
+antConstraint <- read.csv("data/Mphar_constraint.csv")
+beeSnipre <- read.csv("results/bayesian_results_apis.csv")
+colnames(antConstraint) = c("Gene","f")
+antSub = antEvol[!is.na(antEvol$Fixed.Non.Synonymous),c(1,13,12,15,14,17,16)]
+colnames(antSub) = c("Gene","FN","FS","PN","PS","Trepl","Tsil")
+antSub = merge(antSub,antConstraint,by="Gene")
+beeConstraint = read.table("results/MKtest_out")
+beeSub = cbind(beeSub,f=as.numeric(as.character((t(beeConstraint[2,4:(ncol(beeConstraint) - 1)])))))
+antGamma = antEvol[!is.na(antEvol$BSnIPRE.gamma),c(1,20)]
+beeGamma = beeSnipre[!is.na(beeSnipre$BSnIPRE.gamma),c("gene","BSnIPRE.gamma")]
+colnames(beeGamma)[1] = "Gene"
+antSub = merge(antSub,antGamma,by="Gene")
+beeAnn = read.csv("results/annotation.csv",header=F) 
+beeAnn = beeAnn[!duplicated(beeAnn$V5),]
+beeGamma = merge(beeGamma,beeAnn,by.x="Gene",by.y="V5")
+beeSub = merge(beeSub,beeGamma[,c(2,6)],by.x = "Gene",by.y="V4")
+
+beeT <- read.table("data/bees.tpm.txt",header=TRUE)
+antT <- read.table("data/ants.tpm.txt",header=TRUE)
+modifyDF <- function(data){
+  rownames(data)=data[,1]
+  return(data[!grepl("ERCC",rownames(data)),-c(1)])
+}
+beeT <- modifyDF(beeT)
+antT <- modifyDF(antT)
+antT = antT[rowSums(antT) > 0,]
+beeT = beeT[rowSums(beeT) > 0,]
+```
+
+##Collecting Data
+```{r collect}
+beeS = merge(beeRes[[2]],beeSub,by="Gene") %>% melt(id.vars=colnames(beeSub))
+antS = merge(antRes[[2]],antSub,by="Gene") %>% melt(id.vars=colnames(antSub))
+beeS$species = "bee"
+antS$species = "ant"
+beeS$divRank = rank(beeS$FN/(beeS$FS+beeS$FN+1))
+antS$divRank = rank(antS$FN/(antS$FS+antS$FN+1))
+
+allS = rbind(beeS,antS)
+```
+
+## Part 1: Divergence of worker and queen genes
+
+```{r divergence}
+ggplot(allS,aes(x = variable,fill=value,y=(FN/(FN+FS+1))))+
+  geom_boxplot(notch=T)+
+  facet_wrap(. ~ species)+
+  theme(axis.text.x=element_text(angle=90))
+
+#This removes genes with zero substitutions
+ggplot(allS,aes(x = variable,fill=value,y=(FN/(FN+FS))))+
+  geom_boxplot(notch=T)+
+  facet_wrap(. ~ species)+
+  theme(axis.text.x=element_text(angle=90))
+```
+
+## Part 2: Selective Constraint and Pi
+ - note that for now only have pi for bees
+```{r constraint}
+#constraint
+ggplot(allS,aes(x = variable,fill=value,y=f))+
+  geom_boxplot(notch=T)+
+  facet_wrap(. ~ species)+
+  theme(axis.text.x=element_text(angle=90))
+
+#pi (just bees)
+Bpi = merge(beePi,beeS,by="Gene")
+ggplot(Bpi,aes(x=variable,y=pi,fill=value))+
+  geom_boxplot(notch=T)+
+  facet_wrap(. ~ species)+
+  theme(axis.text.x=element_text(angle=90))
+```
+
+## Note: the distributions of f look weird (but are consistent with more diversity in pharaonis sequences)
+```{r hist}
+hist(antS$f)
+hist(beeS$f)
+```
+
+## Part 3: Positive selection
+```{r pos}
+ggplot(allS,aes(x = variable,fill=value,y=BSnIPRE.gamma))+
+  geom_boxplot(notch=T)+
+  facet_wrap(. ~ species)+
+  coord_cartesian(ylim = c(-1,4))+
+  theme(axis.text.x=element_text(angle=90))
+```
+
+## Honey bee gamma distribution also looks weird
+```{r positive}
+hist(antS$BSnIPRE.gamma)
+hist(beeS$BSnIPRE.gamma)
+```
+
