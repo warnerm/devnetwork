@@ -56,6 +56,7 @@ beeSub <- read.csv("results/substitutions.csv")
 antEvol <- read.csv("data/MpharAnn.csv")
 antConstraint <- read.csv("data/Mphar_constraint.csv")
 beeSnipre <- read.csv("results/bayesian_results_apis.csv")
+alphaResults <- read.csv("results/collectedAlpha.csv")
 colnames(antConstraint) = c("Gene","f")
 antSub = antEvol[!is.na(antEvol$Fixed.Non.Synonymous),c(1,13,12,15,14,17,16)]
 colnames(antSub) = c("Gene","FN","FS","PN","PS","Trepl","Tsil")
@@ -85,8 +86,8 @@ beeT = beeT[rowSums(beeT) > 0,]
 
 ##Collecting Data
 ```{r collect}
-beeS = merge(beeRes[[2]],beeSub,by="Gene") %>% melt(id.vars=colnames(beeSub))
-antS = merge(antRes[[2]],antSub,by="Gene") %>% melt(id.vars=colnames(antSub))
+beeS = merge(beeRes_allstage[[2]],beeSub,by="Gene") %>% melt(id.vars=colnames(beeSub))
+antS = merge(antRes_allstage[[2]],antSub,by="Gene") %>% melt(id.vars=colnames(antSub))
 beeS$species = "bee"
 antS$species = "ant"
 beeS$divRank = rank(beeS$FN/(beeS$FS+beeS$FN+1))
@@ -133,7 +134,7 @@ hist(antS$f)
 hist(beeS$f)
 ```
 
-## Part 3: Positive selection
+## Part 3: Positive selection, Gamma
 ```{r pos}
 ggplot(allS,aes(x = variable,fill=value,y=BSnIPRE.gamma))+
   geom_boxplot(notch=T)+
@@ -146,5 +147,14 @@ ggplot(allS,aes(x = variable,fill=value,y=BSnIPRE.gamma))+
 ```{r positive}
 hist(antS$BSnIPRE.gamma)
 hist(beeS$BSnIPRE.gamma)
+```
+
+## Part 3: Positive selection, alpha
+```{r alpha}
+ggplot(alphaResults,aes(x=stage,y=alpha,fill=caste))+
+  geom_bar(stat="identity")+
+  geom_errorbar(aes(ymin=c1,ymax=c2),width=0.2)+
+  facet_wrap(. ~ species)+
+  theme(axis.text.x = element_text(angle=90))
 ```
 
