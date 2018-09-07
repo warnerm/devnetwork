@@ -7,8 +7,9 @@ outputFile = args[2]
 
 collect <- function(stage,species){
   df <- read.csv(paste(inDir,"alpha_globalF_",stage,".",species,".csv",sep=""),sep="\t")
-  alpha = apply(df[,c(5:7)],2,mean)
-  c1 = apply(df[,c(5:7)],2,function(x) quantile(x,0.025))
+  alpha = df[1,c(5:7)] #First line is the true values (no permutation test)
+  df = df[-1,]
+  c1 = apply(df[,c(5:7)],2,function(x) quantile(x,0.025)) #Note that every result is printed twice, but we don't really care because we are just looking for quantiles anyway
   c2 = apply(df[,c(5:7)],2,function(x) quantile(x,0.975))
   d = as.data.frame(do.call(cbind,list(alpha,c1,c2)))
   d$caste = c("nonDE","worker","queen")
