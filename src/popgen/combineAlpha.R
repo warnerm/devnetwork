@@ -6,10 +6,11 @@ inDir = args[1]
 outputFile = args[2]
 
 collect <- function(stage,species){
-  df <- read.csv(paste(inDir,"alpha_globalF_",stage,".",species,".csv",sep=""),sep="\t")
-  alpha = apply(df[1,c(5:7)],2,function(x) x) #First line is the true values (no permutation test)
+  df <- read.csv(paste(inDir,"alpha_locusF_",stage,".",species,".csv",sep=""),sep="\t")
+  alpha = apply(df[,c(5:7)],2,mean) #First line is the true values (no permutation test)
   rownames(alpha) = NULL
   df = df[-1,]
+  print(head(df))
   c1 = apply(df[,c(5:7)],2,function(x) quantile(x,0.025,na.rm=T)) #Note that every result is printed twice, but we don't really care because we are just looking for quantiles anyway
   c2 = apply(df[,c(5:7)],2,function(x) quantile(x,0.975,na.rm=T))
   d = as.data.frame(do.call(cbind,list(alpha,c1,c2)))
