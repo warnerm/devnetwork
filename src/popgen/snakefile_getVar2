@@ -207,7 +207,7 @@ rule MKtest_alpha:
 rule combineMK:
 	input: expand("../out/alpha_globalF_{stage}.{species}.csv",stage=STAGE,species=SPECIES)
 	output: "../out/collectedAlpha.csv"
-	shell: "Rscript combineMK.R {output}"
+	shell: "Rscript combineAlpha.R ../out/ {output}"
 
 
 #Calculate pi within honeybee population
