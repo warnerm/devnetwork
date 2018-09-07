@@ -151,10 +151,12 @@ hist(beeS$BSnIPRE.gamma)
 
 ## Part 3: Positive selection, alpha
 ```{r alpha}
+alphaResults$stage = factor(alphaResults$stage,levels = c("L2","L3","L4","L5","pupa","head","thorax","abdomen"))
 ggplot(alphaResults,aes(x=stage,y=alpha,fill=caste))+
-  geom_bar(stat="identity")+
-  geom_errorbar(aes(ymin=c1,ymax=c2),width=0.2)+
+  geom_bar(stat="identity",position=position_dodge())+
+  geom_errorbar(aes(ymin=c1,ymax=c2),position=position_dodge(width=0.9))+
   facet_wrap(. ~ species)+
-  theme(axis.text.x = element_text(angle=90))
+  theme(axis.text.x = element_text(angle=90))+
+  coord_cartesian(ylim=c(-0.25,0.5))
 ```
 
