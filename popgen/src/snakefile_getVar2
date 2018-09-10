@@ -1,0 +1,232 @@
+'''
+#Software
+GATK version 4.0.5.2
+Platypus version 0.8.1
+samtools version 1.7, htslib version 1.7.2
+freebayes v1.2.0
+vcftools
+Baysic v1.0
+bedtools v2.26.0
+'''
+SAMPLES, = glob_wildcards("../temp/alignments/africa_cerana/no_read_group/{sample}.bam")
+PICARD = "/home/warnerm/local_install/picard.jar"
+
+REF = "../ref/GCF_000002195.4_Amel_4.5_genomic.fna"
+GFF = "../ref/GCF_000002195.4_Amel_4.5_genomic.gff"
+THREADS = 20
+PLATYPUS = "/home/warnerm/local_install/Platypus_0.8.1/Platypus.py"
+CALLER=["freebayes","platypus","samtools","GATK"]
+STAGE = ["larva","pupa","head","thorax","abdomen"]
+SPECIES = ["bee","ant"]
+
+
+rule all:
+	input: expand("../out/alpha_locusF_{stage}.{species}.csv",stage=STAGE,species=SPECIES),"../out/old_abd_MK.csv"
+
+rule makeBED:
+	input: GFF
+	output: "../ref/exons.bed"
+	shell: """grep "exon" {GFF} | gff2bed > {output}"""
+
+rule makeDict:
+	input: REF
+	output: "../ref/GCF_000002195.4_Amel_4.5_genomic.dict"
+	shell: "java -jar {PICARD} CreateSequenceDictionary R={input} O={output}"
+
+#Sorts the bam files; necessary for at least samtools
+rule PicardGroups:
+	input: "../temp/alignments/africa_cerana/no_read_group/{sample}.bam"
+	output: "../temp/alignments/africa_cerana/rg_added/{sample}.bam"
+	shell: """java -jar {PICARD} AddOrReplaceReadGroups I={input} O={output} SORT_ORDER=coordinate \
+				CREATE_INDEX=true RGPL=illumina RGID={wildcards.sampled} RGSM={wildcards.sample} RGLB=lib1 RGPU=unit1"""
+
+
+#Split up targets to run freebayes and gatk in parallel
+rule subset_exons:
+	input: "../ref/exons.bed"
+	output: expand("../ref/subEx_{i}.bed",i=range(20))
+	run:
+		for i in range(20):
+			f = output[i]
+			numL = 11610*(i+1)
+			shell("head -n {numL} {input} | tail -n 11610 > {f}")
+
+#'-=' means report genome qualities, the params makes a list of input files, min-alternate-count sets minimum number of chromosomes sampled to consider an allele
+#Using target= exons.bed because we only want to call variants for exons
+rule freeBayes:
+	input: expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES),bed="../ref/subEx_{i}.bed"
+	output: "../var/fb_{i}.vcf"
+	params: 
+		files = "-b " + " -b ".join(expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES)),
+	shell: "freebayes -= {params.files} -v {output} -f {REF} --min-alternate-count 4 --use-best-n-alleles 3 --targets {input[bed]}"
+
+rule mergeFB:
+	input: expand("../var/fb_{i}.vcf",i=range(20))
+	output: "../var/freebayes.vcf"
+	shell: "vcf-concat {input} > {output}"
+
+#Just get first three columns of bed files
+rule editBed:
+	input: "../ref/subEx_{i}.bed"
+	output: "../ref/subEx_{i}_edit.bed"
+	shell: """cat {input} | awk '{{print$1"\t"$2"\t"$3}}' > {output}"""
+
+#Convert bed files to interval lists for gatk
+rule intervalList:
+	input: "../ref/subEx_{i}_edit.bed"
+	output: "../ref/subEx_{i}.interval_list"
+	shell: """export PATH=~/local_install/jdk1.8.0_05/bin:$PATH; java -jar {PICARD} BedToIntervalList I={input} O={output} SD=../ref/GCF_000002195.4_Amel_4.5_genomic.dict"""
+
+rule GATK:
+	input: expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES),intervals= "../ref/subEx_{i}.interval_list"
+	output: "../var/gatk_{i}.vcf"
+	params: files = "-I " + " -I ".join(expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES))
+	shell: """export PATH=~/local_install/jdk1.8.0_05/bin:$PATH; gatk --java-options "-Xmx30g" HaplotypeCaller \
+				-R {REF} \
+				{params.files} \
+				-O {output} \
+				-L {input[intervals]} \
+				--heterozygosity 0.002 \
+				--mbq 20 \
+				--max-alternate-alleles 4"""
+
+
+rule mergeGATK:
+	input: expand("../var/gatk_{i}.vcf",i=range(20))
+	output: "../var/GATK.vcf"
+	shell: "vcf-concat {input} > {output}"
+
+rule samtools:
+	input: BAMs = expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES),bed = "../ref/exons.bed"
+	output: "../var/samtools.vcf"
+	shell: "samtools mpileup -l {input[bed]} -ugf {REF} {input[BAMs]} | bcftools call -vc - | vcfutils.pl varFilter -D 500 > {output}"
+
+
+rule platypus:
+	input: expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES),bed = "../ref/exons.bed"
+	output: "../var/platypus.vcf"
+	params: files = ",".join(expand("../temp/alignments/africa_cerana/rg_added/{sample}.bam",sample=SAMPLES))
+	shell: "python2.7 {PLATYPUS} callVariants --nCPU={THREADS} --refFile={REF} --bamFiles={params.files} --output={output} --maxReads=25000000 --regions=../ref/exons.bed"
+
+#remove insertions and deletions
+rule rmIndel:
+	input: "../var/{VCFcaller}.vcf"
+	output: "../var/{VCFcaller}.snp.recode.vcf"
+	shell: "vcftools --vcf {input} --remove-indels --out ../var/{wildcards.VCFcaller}.snp --recode --recode-INFO-all"
+
+rule allelicPrimitives:
+	input: "../var/{VCFcaller}.snp.recode.vcf"
+	output: "../var/{VCFcaller}.snp.primatives.vcf"
+	shell: "cat {input} | vcfallelicprimitives -kg > {output}"
+
+rule vcfSort:
+	input: "../var/{VCFcaller}.snp.primatives.vcf"
+	output: "../var/{VCFcaller}.snp.primatives.sorted.vcf"
+	shell: "vcf-sort {input} > {output}"
+
+# generate consensus SNP calls
+rule BAYSIC: 	
+	input: expand("../var/{VCFcaller}.snp.primatives.sorted.vcf", VCFcaller=CALLER)
+	output: "../var/consensus.vcf.pos","../var/consensus.vcf"
+	run: 
+		infiles = "".join([" --vcf " + i for i in input])
+		shell("perl baysic.pl --statsOutFile ../var/combined.stats --pvalCutoff 0.8 {} --countsOutFile ../var/combined.cts --vcfOutFile ../var/consensus.vcf".format(infiles))
+
+# select bi-allelic consensus sites
+rule consensusFilter:
+     input: "../var/freebayes.snp.primatives.sorted.vcf","../var/consensus.vcf.pos"
+     output: "../var/final.recode.vcf"
+     shell: "vcftools --vcf {input[0]} --positions {input[1]} --max-alleles 2 --remove-indels --max-missing 0.9 --recode --mac 1 --out  ../var/final"
+
+# estimate SNP effects
+rule snpEff:
+	input: rules.consensusFilter.output
+	output: "../var/snpEff.txt"
+	shell: "java -Xmx7g -jar /home/warnerm/local_install/snpEff/snpEff.jar -no-utr -no-upstream -no-intron -no-intergenic -no-downstream a_mellifera {input} >  {output}"
+
+# determine which SNPs are fixed and which are polymorphic
+# for this we remove the outgroup and compute frequencies
+#Apis cerana is SRR957079
+rule fixedPolymorphic:	
+	input: rules.consensusFilter.output
+	output: "../var/snps.csv"
+	shell: """vcftools --vcf {input} --remove-indv SRR957079 --freq; \
+    awk -v OFS="," ' NR>1 {{split($5,a,":"); if((a[2]=="1") || (a[2]=="0")) state="F"; else state="P"; print $1,$2,state}}' out.frq > {output} """
+
+rule getCDS:
+	input: GFF, REF
+	output: "../ref/cds.fa"
+	shell: "gffread {input[0]} -g {input[1]} -x {output}"
+
+rule filterLongest:
+	input: rules.getCDS.output
+	output: "../ref/longest.fa"
+	shell: "python filter_longest.py {input} > {output}"
+
+# exports silent and replacement sites from snpEff
+rule parseSilentReplacement:
+	input: rules.filterLongest.output, rules.snpEff.output
+	output: "../var/annotation.csv"
+	shell: "python2.7 parse_silentReplacement.py {input} > {output}"
+
+# calculate how many synonymous vs_non-synonymous changes are possible
+rule silentReplacement:
+	input: rules.filterLongest.output
+	output: "../var/silentReplacement.csv"
+	shell: "python2.7 silent_replacement.py {input} > {output}"
+
+#Tabulate substitutions
+rule tab_subs:
+	input: rules.parseSilentReplacement.output,rules.fixedPolymorphic.output,rules.silentReplacement.output
+	output: "../out/substitutions.csv"
+	shell: "Rscript --vanilla tabulate_substitutions.R {input} {output}"
+
+rule snipre:
+	input: rules.silentReplacement.output, rules.parseSilentReplacement.output,rules.fixedPolymorphic.output
+	output: "../out/bayesian_results_apis.csv"
+	shell: "Rscript --vanilla snipre.R {input} {output}"
+
+#Make MKinput files for alpha classes (both species)
+rule MKclass_input:
+	input: "../out/substitutions.csv","../data/DEtests.RData","../data/MpharAnn.csv"
+	output: expand("../MK_alpha_input/{stage}.{species}.csv",stage=STAGE,species=SPECIES),"../MK_alpha_input/old_abd.csv"
+	shell: "Rscript MKalphaInput.R"
+
+#Calculate constraint from MKtest
+rule MKtest_constraint:
+	input: "../MK_alpha_input/{species}.abdomen.csv"
+	output: "../out/MKtest_globalAlpha_locusF_{species}"
+	shell: "MKtest -a 1 -f 2 -o {output} {input}"
+
+#Bootstrap MKtest for alpha results (class-specific alpha)
+rule MKtest_alpha:
+	input: "../MK_alpha_input/{stage}.{species}.csv"
+	output: "../out/alpha_locusF_{stage}.{species}.csv"
+	shell: "MKtest -a 3 -f 2 -P 100 -o {output} {input}"
+
+#Check the old results
+rule Check_old:
+	input: "../MK_alpha_input/old_abd.csv"
+	output: "../out/old_abd_MK.csv"
+	shell: "MKtest -a 3 -f 2 -P 100 -o {output} {input}"
+
+#Combine alpha results
+rule combineMK:
+	input: expand("../out/alpha_locusF_{stage}.{species}.csv",stage=STAGE,species=SPECIES)
+	output: "../out/collectedAlpha.csv"
+	shell: "Rscript combineAlpha.R ../out/ {output}"
+
+#Calculate pi within honeybee population
+rule calcPi:
+	input: rules.consensusFilter.output
+	output: "../out/apis.sites.pi"
+	shell: "vcftools --vcf {input} --site-pi --remove-indv SRR957079 --out ../out/apis"
+
+#Calculate gene-wise pi
+rule genePi:
+	input: rules.parseSilentReplacement.output,rules.calcPi.output
+	output: "../out/apis.gene.pi.csv"
+	shell: "Rscript --vanilla pi_per_gene.R {input} {output}"
+
+
+
