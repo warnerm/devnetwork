@@ -21,7 +21,7 @@ SPECIES = ["bee","ant"]
 
 
 rule all:
-	input: expand("../out/alpha_locusF_{stage}.{species}.csv"00,stage=STAGE,species=SPECIES),"../out/old_abd_MK.csv"
+	input: expand("../out/alpha_locusF_{stage}.{species}.csv",stage=STAGE,species=SPECIES),"../out/old_abd_MK.csv"
 
 rule makeBED:
 	input: GFF
