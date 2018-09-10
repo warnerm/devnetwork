@@ -21,7 +21,7 @@ SPECIES = ["bee","ant"]
 
 
 rule all:
-	input: expand("../out/alpha_locusF_{stage}.{species}.csv",stage=STAGE,species=SPECIES),"../out/old_abd_MK.csv"
+	input: expand("../out/alpha_locusF_{stage}.{species}.csv"00,stage=STAGE,species=SPECIES),"../out/old_abd_MK.csv"
 
 rule makeBED:
 	input: GFF
@@ -194,7 +194,7 @@ rule MKclass_input:
 
 #Calculate constraint from MKtest
 rule MKtest_constraint:
-	input: "../MK_alpha_input/{species}.abdomen.csv"
+	input: "../MK_alpha_input/abdomen.{species}.csv"
 	output: "../out/MKtest_globalAlpha_locusF_{species}"
 	shell: "MKtest -a 1 -f 2 -o {output} {input}"
 
@@ -202,13 +202,13 @@ rule MKtest_constraint:
 rule MKtest_alpha:
 	input: "../MK_alpha_input/{stage}.{species}.csv"
 	output: "../out/alpha_locusF_{stage}.{species}.csv"
-	shell: "MKtest -a 3 -f 2 -P 100 -o {output} {input}"
+	shell: "MKtest -a 3 -f 2 -P -100 -o {output} {input}"
 
 #Check the old results
 rule Check_old:
 	input: "../MK_alpha_input/old_abd.csv"
 	output: "../out/old_abd_MK.csv"
-	shell: "MKtest -a 3 -f 2 -P 100 -o {output} {input}"
+	shell: "MKtest -a 3 -f 2 -P -100 -o {output} {input}"
 
 #Combine alpha results
 rule combineMK:
