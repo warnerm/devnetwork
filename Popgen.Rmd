@@ -82,6 +82,27 @@ beeT <- modifyDF(beeT)
 antT <- modifyDF(antT)
 antT = antT[rowSums(antT) > 0,]
 beeT = beeT[rowSums(beeT) > 0,]
+
+#Bootstrap for confidence intervals of mean
+bootMean <- function(d,boots,stage,species,variable){
+  m = mean(d)
+  mboot = sapply(1:boots,function(x){
+    mean(sample(d,length(d),replace=TRUE))
+  })
+  return(c(mean=m,c1=quantile(mboot,0.025),c2=quantile(mboot,0.975),
+           stage=stage,species=species,variable=variable))
+}
+
+calcMean <- function(d,col){
+  Sum <- ldply(lapply(levels(d$species),function(i){
+    ldply(lapply(levels(d$stage),function(j){
+      ldply(lapply(levels(d$variable),function(k){
+        bootMean(d[d$species==i&d$stage==j&d$variable==k,col],1000,j,i,k)
+      }))
+    }))
+  }))
+  return(Sum)
+}
 ```
 
 ##Collecting Data
