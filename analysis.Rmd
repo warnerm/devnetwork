@@ -590,6 +590,57 @@ p4 <- ggplot(DmelSC[grepl("conserved",DmelSC$abdDE),],aes(x = abdDE,y=-logFC))+
 p4
 ```
 
+##Development section
+
+##Comparison to pre-defined sex and development genes
+```{r devel_analysis,fig.width=8,fig.height=8}
+DmelSC = merge(sexGenes,ogg11,by="gene_Amel")
+key <- read.table("data/DmelKey.txt") #protein-CDS
+key2 <- read.table("data/Dmel_CDStoGene_key.txt") #Gene-CDS
+devel <- read.table("data/Dmel_Devel_IDs.txt") #Downloaded from flybase, genes with developmental terms
+sex <- read.table("data/Dmel_Sex_IDs.txt") #Downloaded from flybase, genes with sex terms
+key3 = merge(key,key2,by="V1")
+DmelSC = merge(DmelSC,key3,by.x="Gene",by.y="V2.y")
+DmelSC$develSex = "nonDE"
+DmelSC$develSex[DmelSC$V2.x %in% devel$V1] = "devel"
+DmelSC$develSex[DmelSC$V2.x %in% sex$V1] = "sex"
+DmelSC$develSex[DmelSC$V2.x %in% sex$V1 & DmelSC$V2.x %in% devel$V1] = "sex and devel"
+
+DmelSC$develSex = factor(DmelSC$develSex,levels = c("nonDE","sex and devel","devel","sex"))
+p <- ggplot(DmelSC[!grepl("ant",DmelSC$abdDE),],aes(x = abdDE,fill=develSex))+
+  geom_bar(stat="count",position="fill")+
+  ylab("proportion")+
+  xlab("abdominal caste bias")
+p
+```
+
+## -log(P-value) for genes with conserved abdominal differential expression
+```{r develIndex}
+#using DE results
+antDevel2$Gene=rownames(antDevel2)
+aD = merge(ogg11,antDevel2,by.x="gene_Mphar",by.y="Gene")
+
+p1 <- ggplot(aD[!grepl("ant",aD$abdDE),],aes(x = abdDE,y=-log(PValue)))+
+  geom_boxplot(notch = T)+
+  scale_y_log10()+
+  theme(axis.text.x = element_text(angle=90))+
+  ggtitle("devel measured in ant")
+
+beeDevel2$Gene=rownames(beeDevel2)
+bD = merge(ogg11,beeDevel2,by.x="gene_Amel",by.y="Gene")
+
+p2 <- ggplot(bD[!grepl("ant",bD$abdDE),],aes(x = abdDE,y=-log(PValue)))+
+  geom_boxplot(notch = T)+
+  scale_y_log10()+
+  theme(axis.text.x = element_text(angle=90))+
+  ggtitle("devel measured in bee")
+
+grid.arrange(p1,p2,nrow=1)
+```
+
+
+
+
 ## 4.1 Calculation of overall caste bias
 ```{r casteBias}
 #Calculate euclidean distance
@@ -695,55 +746,6 @@ p1 <- ggplot(bT,aes(x=tau,y=cb))+
         legend.title=element_blank())
 p1
 ```
-
-##Development section
-
-##Comparison to pre-defined sex and development genes
-```{r devel_analysis,fig.width=8,fig.height=8}
-DmelSC = merge(sexGenes,ogg11,by="gene_Amel")
-key <- read.table("data/DmelKey.txt") #protein-CDS
-key2 <- read.table("data/Dmel_CDStoGene_key.txt") #Gene-CDS
-devel <- read.table("data/Devel_IDs.txt") #Downloaded from flybase, genes with developmental terms
-sex <- read.table("data/Sex_IDs.txt") #Downloaded from flybase, genes with sex terms
-key3 = merge(key,key2,by="V1")
-DmelSC = merge(DmelSC,key3,by.x="Gene",by.y="V2.y")
-DmelSC$develSex = "nonDE"
-DmelSC$develSex[DmelSC$V2.x %in% devel$V1] = "devel"
-DmelSC$develSex[DmelSC$V2.x %in% sex$V1] = "sex"
-DmelSC$develSex[DmelSC$V2.x %in% sex$V1 & DmelSC$V2.x %in% devel$V1] = "sex and devel"
-
-DmelSC$develSex = factor(DmelSC$develSex,levels = c("nonDE","sex and devel","devel","sex"))
-p <- ggplot(DmelSC[!grepl("ant",DmelSC$abdDE),],aes(x = abdDE,fill=develSex))+
-  geom_bar(stat="count",position="fill")+
-  ylab("proportion")+
-  xlab("abdominal caste bias")
-p
-```
-
-## -log(P-value) for genes with conserved abdominal differential expression
-```{r develIndex}
-#using DE results
-antDevel2$Gene=rownames(antDevel2)
-aD = merge(ogg11,antDevel2,by.x="gene_Mphar",by.y="Gene")
-
-p1 <- ggplot(aD[!grepl("ant",aD$abdDE),],aes(x = abdDE,y=-log(FDR)))+
-  geom_boxplot(notch = T)+
-  scale_y_log10()+
-  theme(axis.text.x = element_text(angle=90))+
-  ggtitle("devel measured in ant")
-
-beeDevel2$Gene=rownames(beeDevel2)
-bD = merge(ogg11,beeDevel2,by.x="gene_Amel",by.y="Gene")
-
-p2 <- ggplot(bD[!grepl("ant",bD$abdDE),],aes(x = abdDE,y=-log(FDR)))+
-  geom_boxplot(notch = T)+
-  scale_y_log10()+
-  theme(axis.text.x = element_text(angle=90))+
-  ggtitle("devel measured in bee")
-
-grid.arrange(p1,p2,nrow=1)
-```
-
 
 
 
