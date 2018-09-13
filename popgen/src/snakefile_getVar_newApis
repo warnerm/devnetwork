@@ -1,0 +1,136 @@
+THREADS = 20
+REF = "../ref/amel_ref_reordered.fa"
+GFF = "../ref/amel_reoriented.gff"
+PICARD = "/home/warnerm/local_install/picard.jar"
+
+PLATYPUS = "/home/warnerm/local_install/Platypus_0.8.1/Platypus.py"
+CALLER=["freebayes","platypus","samtools","GATK"]
+
+rule all:
+	input: "../var/amel_reordered_final.recode.vcf"
+
+rule buildBowtie:
+	input: REF
+	output: "../ref/amel_reordered.1.bt2"
+	shell: "bowtie2-build {REF} ../ref/amel_reordered"
+
+#Download Apis cerana
+rule downloadData:
+	output: "../data/fastq/SRR957079_pass.fastq"
+	shell: "python2.7 download_data.py SRR957079"
+
+rule alignReads:
+	input: rules.buildBowtie.output,rules.downloadData.output
+	output: "../temp/amel_reordered_alignments/SRR957079.bam"
+	shell: """bowtie2 -x ../ref/amel_reordered -U {input[1]} -p {THREADS} | samtools view -bSF4 > {output}"""
+
+#Sorts the bam files; necessary for at least samtools
+rule PicardGroups:
+	input: "../temp/amel_reordered_alignments/SRR957079.bam"
+	output: "../temp/amel_reordered_alignments/SRR957079_RG.bam"
+	shell: """java -jar {PICARD} AddOrReplaceReadGroups I={input} O={output} SORT_ORDER=coordinate \
+				CREATE_INDEX=true RGPL=illumina RGID=cerana RGSM=cerana RGLB=lib1 RGPU=unit1"""
+
+rule makeBED:
+	input: GFF
+	output: "../ref/amel_reordered_exons.bed"
+	shell: """grep "exon" {GFF} | gff2bed > {output}"""
+
+rule makeDict:
+	input: REF
+	output: "../ref/amel_ref_reordered.dict"
+	shell: "java -jar {PICARD} CreateSequenceDictionary R={input} O={output}"
+
+	#Split up targets to run freebayes and gatk in parallel
+rule subset_exons:
+	input: "../ref/amel_reordered_exons.bed"
+	output: expand("../ref/amel_reordered_subEx_{i}.bed",i=range(20))
+	run:
+		for i in range(20):
+			f = output[i]
+			numL = 11610*(i+1)
+			shell("head -n {numL} {input} | tail -n 11610 > {f}")
+
+#'-=' means report genome qualities, the params makes a list of input files, min-alternate-count sets minimum number of chromosomes sampled to consider an allele
+#Using target= exons.bed because we only want to call variants for exons
+rule freeBayes:
+	input: rules.PicardGroups.output,bed="../ref/amel_reordered_subEx_{i}.bed"
+	output: "../var/amel_reordered_fb_{i}.vcf"
+	shell: "freebayes -= -b {input[0]} -v {output} -f {REF} --min-alternate-count 4 --use-best-n-alleles 3 --targets {input[bed]}"
+
+rule mergeFB:
+	input: expand("../var/amel_reordered_fb_{i}.vcf",i=range(20))
+	output: "../var/amel_reordered_freebayes.vcf"
+	shell: "vcf-concat {input} > {output}"
+
+#Just get first three columns of bed files for GATK
+rule editBed:
+	input: "../ref/amel_reordered_subEx_{i}.bed"
+	output: "../ref/amel_reordered_subEx_{i}_edit.bed"
+	shell: """cat {input} | awk '{{print$1"\t"$2"\t"$3}}' > {output}"""
+
+#Convert bed files to interval lists for gatk
+rule intervalList:
+	input: "../ref/amel_ref_reordered.dict",bed="../ref/amel_reordered_subEx_{i}_edit.bed",
+	output: "../ref/amel_reordered_subEx_{i}.interval_list"
+	shell: """export PATH=~/local_install/jdk1.8.0_05/bin:$PATH; java -jar {PICARD} BedToIntervalList I={input[bed]} O={output} SD={input[0]}"""
+
+rule GATK:
+	input: rules.PicardGroups.output,intervals= "../ref/amel_reordered_subEx_{i}.interval_list"
+	output: "../var/amel_reordered_gatk_{i}.vcf"
+	shell: """export PATH=~/local_install/jdk1.8.0_05/bin:$PATH; gatk --java-options "-Xmx30g" HaplotypeCaller \
+				-R {REF} \
+				-I {input[0]} \
+				-O {output} \
+				-L {input[intervals]} \
+				--heterozygosity 0.002 \
+				--mbq 20 \
+				--max-alternate-alleles 4"""
+
+rule mergeGATK:
+	input: expand("../var/amel_reordered_gatk_{i}.vcf",i=range(20))
+	output: "../var/amel_reordered_GATK.vcf"
+	shell: "vcf-concat {input} > {output}"
+
+rule samtools:
+	input: rules.PicardGroups.output,rules.makeBED.output
+	output: "../var/amel_reordered_samtools.vcf"
+	shell: "samtools mpileup -l {input[1]} -ugf {REF} {input[0]} | bcftools call -vc - | vcfutils.pl varFilter -D 500 > {output}"
+
+rule platypus:
+	input: rules.PicardGroups.output,rules.makeBED.output
+	output: "../var/amel_reordered_platypus.vcf"
+	shell: "python2.7 {PLATYPUS} callVariants --nCPU={THREADS} --refFile={REF} --bamFiles={input[0]} --output={output} --maxReads=25000000 --regions={input[1]}"
+
+#remove insertions and deletions
+rule rmIndel:
+	input: "../var/amel_reordered_{VCFcaller}.vcf"
+	output: "../var/amel_reordered_{VCFcaller}.snp.recode.vcf"
+	shell: "vcftools --vcf {input} --remove-indels --out ../var/{wildcards.VCFcaller}.snp --recode --recode-INFO-all"
+
+rule allelicPrimitives:
+	input: "../var/amel_reordered_{VCFcaller}.snp.recode.vcf"
+	output: "../var/amel_reordered_{VCFcaller}.snp.primatives.vcf"
+	shell: "cat {input} | vcfallelicprimitives -kg > {output}"
+
+rule vcfSort:
+	input: "../var/amel_reordered_{VCFcaller}.snp.primatives.vcf"
+	output: "../var/amel_reordered_{VCFcaller}.snp.primatives.sorted.vcf"
+	shell: "vcf-sort {input} > {output}"
+
+# generate consensus SNP calls
+rule BAYSIC: 	
+	input: expand("../var/amel_reordered_{VCFcaller}.snp.primatives.sorted.vcf", VCFcaller=CALLER)
+	output: "../var/amel_reordered_consensus.vcf.pos","../var/amel_reordered_consensus.vcf"
+	run: 
+		infiles = "".join([" --vcf " + i for i in input])
+		shell("perl baysic.pl --statsOutFile ../var/combined.stats --pvalCutoff 0.8 {} --countsOutFile ../var/amel_reordered_combined.cts --vcfOutFile ../var/amel_reordered_consensus.vcf".format(infiles))
+
+# select bi-allelic consensus sites
+rule consensusFilter:
+     input: "../var/amel_reordered_freebayes.snp.primatives.sorted.vcf","../var/amel_reordered_consensus.vcf.pos"
+     output: "../var/amel_reordered_final.recode.vcf"
+     shell: "vcftools --vcf {input[0]} --positions {input[1]} --max-alleles 2 --remove-indels --max-missing 0.9 --recode --mac 1 --out  ../var/amel_reordered_final"
+
+
+
