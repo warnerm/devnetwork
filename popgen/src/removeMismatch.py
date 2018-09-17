@@ -32,7 +32,7 @@ with open(group_file,'r') as f:
 					removeSeqs = np.append(removeSeqs,pos)
 					continue
 		with open(new_group,'a') as out:
-			out.write(line+'\n')
+			out.write(line)
 
 print("Removed "+str(removed)+" sequences from group file")
 removed = 0
@@ -48,6 +48,6 @@ with open(cerana_file,'r') as f:
 				removed = removed+1;
 				continue
 		with open(new_cerana,'a') as out:
-			out.write(line+'\n')
+			out.write(line)
 
 print("Removed "+str(removed)+" sequences from cerana file")
