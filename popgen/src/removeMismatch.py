@@ -34,7 +34,7 @@ with open(group_file,'r') as f:
 		with open(new_group,'a') as out:
 			out.write(line+'\n')
 
-print("Removed "+removed+" sequences from group file")
+print("Removed "+str(removed)+" sequences from group file")
 removed = 0
 
 out = open(new_cerana,'w')
@@ -50,4 +50,4 @@ with open(cerana_file,'r') as f:
 		with open(new_cerana,'a') as out:
 			out.write(line+'\n')
 
-print("Removed "+removed+" sequences from cerana file")
+print("Removed "+str(removed)+" sequences from cerana file")
