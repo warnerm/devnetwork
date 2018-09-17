@@ -5,9 +5,17 @@ PICARD = "/home/warnerm/local_install/picard.jar"
 
 PLATYPUS = "/home/warnerm/local_install/Platypus_0.8.1/Platypus.py"
 CALLER=["freebayes","platypus","samtools","GATK"]
+STAGE = ["larva","pupa","head","thorax","abdomen"]
+
+GROUPS, = glob_wildcards("../var/apis_bigStudy/{group}.vcf")
+
 
 rule all:
-	input: "../var/amel_reordered_final.recode.vcf"
+	input: expand("../out/alpha_locusF_{stage}.bee_reordered.csv",stage=STAGE),
+			"../out/MKtest_globalAlpha_locusF_bee_reordered",
+			"../out/apis_reordered.gene.pi.csv",
+			"../out/bayesian_results_apis_reordered.csv"
+
 
 rule buildBowtie:
 	input: REF
@@ -106,7 +114,7 @@ rule platypus:
 rule rmIndel:
 	input: "../var/amel_reordered_{VCFcaller}.vcf"
 	output: "../var/amel_reordered_{VCFcaller}.snp.recode.vcf"
-	shell: "vcftools --vcf {input} --remove-indels --out ../var/{wildcards.VCFcaller}.snp --recode --recode-INFO-all"
+	shell: "vcftools --vcf {input} --remove-indels --out ../var/amel_reordered_{wildcards.VCFcaller}.snp --recode --recode-INFO-all"
 
 rule allelicPrimitives:
 	input: "../var/amel_reordered_{VCFcaller}.snp.recode.vcf"
@@ -131,6 +139,156 @@ rule consensusFilter:
      input: "../var/amel_reordered_freebayes.snp.primatives.sorted.vcf","../var/amel_reordered_consensus.vcf.pos"
      output: "../var/amel_reordered_final.recode.vcf"
      shell: "vcftools --vcf {input[0]} --positions {input[1]} --max-alleles 2 --remove-indels --max-missing 0.9 --recode --mac 1 --out  ../var/amel_reordered_final"
+
+#rename Groups to LG to match other vcf files
+rule renameVCF:
+	input: rules.consensusFilter.output
+	output: "../var/amel_reordered_edit.recode.vcf"
+	shell: "sed 's/Group/LG/' {input} | vcf-sort > {output}"
+
+#combine vcfs among groups
+rule combineVCF:
+	input: expand("../var/apis_bigStudy/{group}.vcf",group=GROUPS)
+	output: "../var/amel_reordered_allGroups.vcf"
+	shell: "vcf-concat {input} | vcf-sort > {output}"
+
+#remove insertions and deletions
+rule rmIndel_all:
+	input: "../var/amel_reordered_allGroups.vcf"
+	output: "../var/amel_reordered_allGroups.snp.recode.vcf"
+	shell: "vcftools --vcf {input} --remove-indels --out ../var/amel_reordered_allGroups.snp --recode --recode-INFO-all"
+
+rule allelicPrimitives_all:
+	input: "../var/amel_reordered_allGroups.snp.recode.vcf"
+	output: "../var/amel_reordered_allGroups.snp.primatives.vcf"
+	shell: "cat {input} | vcfallelicprimitives -kg > {output}"
+
+rule vcfSort_all:
+	input: "../var/amel_reordered_allGroups.snp.primatives.vcf"
+	output: "../var/amel_reordered_allGroups.snp.primatives.sorted.vcf"
+	shell: "vcf-sort {input} > {output}"
+
+#The vcf files have some conflicting reference alleles. Remove these sites
+rule removeConflicts:
+	input: rules.renameVCF.output,rules.vcfSort_all.output
+	output: "../var/amel_reordered_cerana_noconflict.vcf","../var/amel_reordered_group_noconflict.vcf"
+	shell: "python2.7 removeMismatch.py {input} {output}"
+
+rule tabixCerana:
+	input: "../var/amel_reordered_cerana_noconflict.vcf"
+	output: "../var/amel_reordered_edit.recode.vcf.gz.tbi"
+	shell: "bgzip {input}; tabix -p vcf {input}.gz"
+
+rule tabixAllVCF:
+	input: "../var/amel_reordered_group_noconflict.vcf"
+	output: "../var/amel_reordered_allGroups.snp.primatives.sorted.vcf.gz.tbi"
+	shell: "bgzip {input}; tabix -p vcf {input}.gz"
+
+#Add cerana (outgroup) to vcf
+rule addCerana:
+	input: rules.tabixCerana.output,rules.tabixAllVCF.output
+	output: "../var/amel_reordered_allGroups_plusCerana.vcf"
+	shell: "bcftools merge ../var/amel_reordered_edit.recode.vcf.gz ../var/amel_reordered_allGroups.snp.primatives.sorted.vcf.gz > {output}"
+
+# estimate SNP effects
+rule snpEff:
+	input: rules.addCerana.output
+	output: "../var/snpEff_reordered.txt"
+	shell: "java -Xmx7g -jar /home/warnerm/local_install/snpEff/snpEff.jar -no-utr -no-upstream -no-intron -no-intergenic -no-downstream amel_reordered {input} >  {output}"
+
+# determine which SNPs are fixed and which are polymorphic
+# for this we remove the outgroup and compute frequencies
+#Apis cerana is SRR957079
+rule fixedPolymorphic:	
+	input: rules.addCerana.output
+	output: "../var/snps_reordered.csv"
+	shell: """vcftools --vcf {input} --remove-indv cerana --freq; \
+    awk -v OFS="," ' NR>1 {{split($5,a,":"); if((a[2]=="1") || (a[2]=="0")) state="F"; else state="P"; print $1,$2,state}}' out.frq > {output} """
+
+rule getCDS:
+	input: GFF, REF
+	output: "../ref/cds_reordered.fa"
+	shell: "gffread {input[0]} -g {input[1]} -x {output}"
+
+rule filterLongest:
+	input: rules.getCDS.output
+	output: "../ref/longest_reordered.fa"
+	shell: "python filter_longest.py {input} > {output}"
+
+# exports silent and replacement sites from snpEff
+rule parseSilentReplacement:
+	input: rules.filterLongest.output, rules.snpEff.output
+	output: "../var/annotation_reordered.csv"
+	shell: "python2.7 parse_silentReplacement.py {input} > {output}"
+
+# calculate how many synonymous vs_non-synonymous changes are possible
+rule silentReplacement:
+	input: rules.filterLongest.output
+	output: "../var/silentReplacement_reordered.csv"
+	shell: "python2.7 silent_replacement.py {input} > {output}"
+
+#Tabulate substitutions
+rule tab_subs:
+	input: rules.parseSilentReplacement.output,rules.fixedPolymorphic.output,rules.silentReplacement.output
+	output: "../out/substitutions_reordered.csv"
+	shell: "Rscript --vanilla tabulate_substitutions.R {input} {output}"
+
+rule snipre:
+	input: rules.silentReplacement.output, rules.parseSilentReplacement.output,rules.fixedPolymorphic.output
+	output: "../out/bayesian_results_apis_reordered.csv"
+	shell: "Rscript --vanilla snipre.R {input} {output}"
+
+#Make MKinput files for alpha classes (both species)
+rule MKclass_input:
+	input: "../out/substitutions_reordered.csv","../data/DEtests.RData","../data/MpharAnn.csv"
+	output: expand("../MK_alpha_input/{stage}.bee_reordered.csv",stage=STAGE),"../MK_alpha_input/old_abd.csv"
+	shell: "Rscript MKalphaInput.R"
+
+#Calculate constraint from MKtest
+rule MKtest_constraint:
+	input: "../MK_alpha_input/abdomen.bee_reordered.csv"
+	output: "../out/MKtest_globalAlpha_locusF_bee_reordered"
+	shell: "MKtest -a 1 -f 2 -o {output} {input}"
+
+#Bootstrap MKtest for alpha results (class-specific alpha)
+rule MKtest_alpha:
+	input: "../MK_alpha_input/{stage}.bee_reordered.csv"
+	output: "../out/alpha_locusF_{stage}.bee_reordered.csv"
+	shell: "MKtest -a 3 -f 2 -P -100 -o {output} {input}"
+
+
+#Combine alpha results
+#rule combineMK:
+#	input: expand("../out/alpha_locusF_{stage}.bee_reordered.csv",stage=STAGE)
+#	output: "../out/collectedAlpha_bee_reordered.csv"
+#	shell: "Rscript combineAlpha.R ../out/ {output}"
+
+#Calculate pi within honeybee population
+rule calcPi:
+	input: rules.addCerana.output
+	output: "../out/apis_reordered.sites.pi"
+	shell: "vcftools --vcf {input} --site-pi --remove-indv cerana --out ../out/apis_reordered"
+
+#Calculate gene-wise pi
+rule genePi:
+	input: rules.parseSilentReplacement.output,rules.calcPi.output
+	output: "../out/apis_reordered.gene.pi.csv"
+	shell: "Rscript --vanilla pi_per_gene.R {input} {output}"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
