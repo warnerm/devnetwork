@@ -18,6 +18,7 @@ library(zoo)
 library(reshape2)
 library(EnvStats)
 library(grid)
+library(magrittr)
 library(gridExtra)
 library(extrafont)
 font_import()
@@ -68,6 +69,48 @@ beeT <- modifyDF(beeT)
 antT <- modifyDF(antT)
 antT = antT[rowSums(antT) > 0,]
 beeT = beeT[rowSums(beeT) > 0,]
+
+
+genFactor <- function(counts){
+  factors <- data.frame(sample=colnames(counts))
+  factors$stage = 8
+  factors$stage[grepl("_E",factors$sample)]=1
+  factors$stage[grepl("L1",factors$sample)]=2
+  factors$stage[grepl("L2",factors$sample)]=3
+  factors$stage[grepl("L3",factors$sample)]=4
+  factors$stage[grepl("L4",factors$sample)]=5
+  factors$stage[grepl("L5",factors$sample)]=6
+  factors$stage[grepl("P",factors$sample)]=7
+  factors$tissue="larva"
+  factors$tissue[grepl("P",factors$sample)]="pupa"
+  factors$tissue[grepl("_E",factors$sample)]="egg"
+  factors$tissue[grepl("G\\.",factors$sample)]="gaster"
+  factors$tissue[grepl("H\\.",factors$sample)]="head"
+  factors$tissue[grepl("M\\.",factors$sample)]="mesosoma"
+  factors$NF=NA
+  factors$NF[grepl("_N",factors$sample)]="nurse"
+  factors$NF[grepl("_F",factors$sample)]="forager"
+  factors$caste="worker"
+  factors$caste[grepl("_S|_V|_AQ|_G",factors$sample)]="queen"
+  factors$caste[grepl("_M",factors$sample)]="male"
+  factors$VM=NA
+  factors$VM[grepl("_V",factors$sample)]="virgin"
+  factors$VM[grepl("_AQ",factors$sample)]="mated"
+  factors$colony=1
+  factors$colony[grepl(".2",factors$sample)]=2
+  factors$colony[grepl(".3",factors$sample)]=3
+  for (i in 2:7){
+    factors[,i]=as.factor(factors[,i])
+  }
+  rownames(factors)=factors$sample
+  factors$caste = factor(factors$caste,levels = c("queen","male","worker")) #Queen genes will always be down-regulated
+  factors$tissue = factor(factors$tissue,levels = c("egg","larva","pupa","head","mesosoma","gaster"))
+  factors$NF = factor(factors$NF,levels = c("nurse","forager")) #Make nurse genes down-regulated because nurses should look more like queens (under RGPH)
+  return(factors)
+}
+
+factorA <- genFactor(antT)
+factorB <- genFactor(beeT)
 
 TGmap <- read.table("phylostratigraphy/out/TGmap_Amel.txt")
 TNmap <- as.data.frame(fread("data/AmelTranName.txt",sep="~",header=FALSE))
@@ -132,6 +175,7 @@ p <- ggplot(mA,aes(x=queen,y=worker))+
         strip.background = element_rect(color=NA,fill=NA),
         plot.title = element_text(hjust = 0.5,size=25,face = "bold"),
         panel.border = element_rect(size = 1, color = "black",fill = NA)) 
+ggsave(p,file = "figures/p2.pdf",height=8,width=10)
 ```
 ## 0.1 Number of times a gene is queen- and worker-biased across development 
 
@@ -194,6 +238,9 @@ pl[[3]] = pl[[3]] + ylab("correlation of nurse/forager\nlog2 fold-change")
 ## 0.2 Correlation of log fold-change across stages
 ```{r lfcPlot,fig.height=6,fig.width=18,echo=FALSE}
 do.call(grid.arrange,c(pl,nrow=1))
+p<-do.call(arrangeGrob,c(pl,nrow=1))
+
+ggsave(p,file = "figures/p3.pdf",height=6,width=18)
 ```
 ## 1.1 Caste-bias across development
 ```{r compare def}
@@ -322,10 +369,11 @@ pQ <- ggdraw()+
   draw_plot(p3,x=0.57,y=0.69,height=0.18,width=0.18)
 ```
 
-## 1.1 Caste bias across development## 
+## 1.1 Caste bias across development
 
 ```{r plotCaste, fig.height=6,fig.width=11,echo=FALSE}
 pQ
+ggsave(pQ,file = "figures/p1.pdf",height=6,width=11)
 ```
 
 ## 1.2 Nurse/forager bias
@@ -404,6 +452,7 @@ pSoc <- ggdraw()+
 
 ```{r behavPlot, fig.height=6,fig.width=11,echo=FALSE}
 pSoc
+ggsave(pSoc,file = "figures/p17.pdf",height=6,width=11)
 ```
 
 ## 1.3 Phylostrata of genes with conserved abdominal caste bias
@@ -436,27 +485,145 @@ p <- ggplot(psO,aes(x = a2,fill = forcats::fct_rev(psName)))+
         plot.margin = unit(c(0.5,2,0.5,2),"cm"))
 ```
 
-## 1.3 Estimated evolutionary age of genes with abdominal caste bias## 
+## 1.3 Estimated evolutionary age of genes with abdominal caste bias 
 
 ```{r plotAbdPh,fig.height=6,fig.width=6,echo=FALSE}
 p
+ggsave(p,file = "figures/p4.pdf",height=6,width=6)
 ```
+
+## Phylostrata across all comparisons
+```{r phyloCaste,fig.height=6,fig.width=12}
+ant_PS = merge(antRes[[1]],Aps,by="Gene")
+aPM = melt(ant_PS,id.vars = c("Gene","OGGacu","ps","psName","ODBgene"))
+aPM$species = "ant"
+bee_PS = merge(beeRes[[1]],Bps,by="Gene")
+bPM = melt(bee_PS,id.vars = c("Gene","OGGacu","ps","psName","ODBgene"))
+bPM$species = "bee"
+PM = rbind(aPM,bPM)
+PM$psName = factor(PM$psName,levels = levels(PM$psName)[c(1:5,7,6)])
+p <- ggplot(PM[!is.na(PM$psName),],aes(x = variable,y=-value,fill=psName))+
+  geom_boxplot(outlier.shape = NA,notch=T)+
+  facet_wrap(. ~ species)+
+  ylab("log2 fold-change (queen/worker)")+
+  coord_cartesian(ylim=c(-5,5))+
+  theme(legend.position="bottom")+
+  xlab("stage/tissue")+
+  geom_hline(yintercept = 0,linetype="dashed")
+ggsave(p,file = "figures/p5.pdf",height=6,width=12)
+
+ant_PS = merge(antSocRes[[1]],Aps,by="Gene")
+aPM = melt(ant_PS,id.vars = c("Gene","OGGacu","ps","psName","ODBgene"))
+aPM$species = "ant"
+bee_PS = merge(beeSocRes[[1]],Bps,by="Gene")
+bPM = melt(bee_PS,id.vars = c("Gene","OGGacu","ps","psName","ODBgene"))
+bPM$species = "bee"
+PM = rbind(aPM,bPM)
+PM$psName = factor(PM$psName,levels = levels(PM$psName)[c(1:5,7,6)])
+p <- ggplot(PM[!is.na(PM$psName),],aes(x = variable,y=-value,fill=psName))+
+  geom_boxplot(outlier.shape = NA,notch=T)+
+  facet_wrap(. ~ species)+
+  ylab("log2 fold-change (nurse/forager)")+
+  coord_cartesian(ylim=c(-5,5))+
+  theme(legend.position="bottom")+
+  xlab("tissue")+
+  geom_hline(yintercept = 0,linetype="dashed")
+ggsave(p,file = "figures/p18.pdf",height=6,width=12)
+```
+
+
 
 ## 2.1 Bicluster associated with queen abdominal expression
 -Previously performed plaid clustering and extracted genes commonly found in a queen abdomen-specific bicluster.
-```{r bicluster,fig.width=10,fig.height=6}
+```{r bicluster}
+load("results/PlaidResults.RData")
+freq_set <- function(data,maxMod,factor,tpm,type){
+  res <- lapply(data,function(x){
+    checkMod = seq(1:nrow(x@NumberxCol))[rowSums(x@NumberxCol) <= maxMod]
+    r = list()
+    modI = 0
+    for (mod in checkMod){
+      qp = x@NumberxCol
+      samp = factor$sample[x@NumberxCol[mod,]]
+      if (sum(grepl(type,samp))==3){
+        modI = modI+1
+        genes = rownames(tpm)[x@RowxNumber[,mod]]
+        r[[modI]]=list(samples=samp,genes=genes)
+      }
+    }
+    if (length(r) > 1){
+      rnew = r[[1]]
+      rnew$genes = unique(c(r[[2]]$genes,r[[1]]$genes)) #combine genes from queen abdomen module
+      r = rnew
+    }
+    return(r)
+  })
+  return(res)
+}
+
+#Calculate number of significant biclusters for a given set
+num_set <- function(set){
+  nums = lapply(names(set),function(x){
+    length(set[[x]][lapply(set[[x]],length) > 0])
+  })
+  numDF = data.frame(Type = names(set),Freq=unlist(nums))
+}
+
+commonGenes <- function(QGres,tpm){
+  df = data.frame(Gene=rownames(tpm),KeepNum=0)
+  num = 0
+  for (res in QGres){
+    if (length(res) == 1){
+      num = num+1
+      df$KeepNum[df$Gene %in% res[[1]]$genes] = df$KeepNum[df$Gene %in% res[[1]]$genes] + 1
+    }
+  }
+  df$KeepNum = df$KeepNum/num
+  return(df)
+}
+
+samp_types = sapply(factorA$sample,function(x) gsub(".*_","",x) %>% gsub("\\.[0-9]","",.)) %>%
+  unique()
+
+#Output significant biclusters for each sample type
+type_bicAmel <- lapply(samp_types,function(x) freq_set(beePl,6,factorB,beeT,x))
+type_bicMphar <- lapply(samp_types,function(x) freq_set(antPl,6,factorA,antT,x))
+names(type_bicAmel) = names(type_bicMphar) = samp_types
+typeNum_Amel = num_set(type_bicAmel)
+typeNum_Mphar = num_set(type_bicMphar)
+
+antQG <- type_bicMphar[["AQG"]]
+beeQG <- type_bicAmel[["AQG"]]
+antQG = antQG[lapply(antQG,length) > 0]
+beeQG = beeQG[lapply(beeQG,length) > 0]
+
+aG <- commonGenes(antQG,antT)
+bG <- commonGenes(beeQG,beeT)
+
+pdf("figures/p6.pdf")
+hist(aG$KeepNum)
+dev.off()
+
+pdf("figures/p7.pdf")
+hist(bG$KeepNum)
+dev.off()
+
 #Find out what the genes are
 antGrC = merge(antPlaid,Aps,by="Gene")
 beeGrC = merge(beePlaid,Bps,by="Gene")
 antGrC$species = "ant"
 beeGrC$species = "bee"
 
+#Add -log(p)
+antGrC = merge(antGrC,antRes[[3]],by="Gene")
+beeGrC = merge(beeGrC,beeRes[[3]],by="Gene")
+
 #Make general plot
 allC = rbind(antGrC,beeGrC)
 allC$DEcat = factor(allC$DEcat,levels = c("queen","worker","non-DE"))
 
 #Note -abdomen because we want queen genes to be upregulated
-p1 <- ggplot(allC,aes(x = conn,y=-abdomen))+
+p1 <- ggplot(allC,aes(x = conn,y=-abdomen.x))+
   geom_point(aes(fill = DEcat),pch=21,color="black")+
   scale_fill_manual(values = SexPal[c(1,2,5)],name="DEG type")+
   scale_alpha_continuous(guide="none")+
@@ -475,8 +642,56 @@ p1 <- ggplot(allC,aes(x = conn,y=-abdomen))+
         plot.margin = unit(rep(1,4),"cm"),
         strip.background = element_rect(color=NA,fill=NA))
 
+
+ggsave(p1,file = "figures/p8.pdf",height=6,width=10)
+
+p2 <- ggplot(allC,aes(x = conn,y=-log(abdomen.y)))+
+  geom_point(aes(fill = DEcat),pch=21,color="black")+
+  scale_fill_manual(values = SexPal[c(1,2,5)],name="DEG type")+
+  scale_alpha_continuous(guide="none")+
+  ylab("-log(P) of queen/worker\ndifferential expression")+
+  xlab("scaled connectivity in abdominal module")+
+  plot2theme+
+  facet_grid(. ~ species)+
+  theme(panel.spacing = unit(2, "lines"))+
+  guides(fill = guide_legend(override.aes = list(size=4)))+
+  scale_x_log10()+
+  theme(legend.position ="none",
+        legend.text = element_text(size=15),
+        strip.text = element_text(size=22,face="bold"),
+        axis.title.y=element_text(margin=margin(t=0,l=0,r=10,b=0)),
+        legend.title = element_blank(),
+        plot.margin = unit(rep(1,4),"cm"),
+        strip.background = element_rect(color=NA,fill=NA))
+
+
+ggsave(p2,file = "figures/p9.pdf",height=6,width=10)
+```
+
+## Highly connected bicluster genes are queen-biased
+```{r bicPlot,fig.width=10,fig.height=6}
 p1
 ```
+
+## Age of genes in bicluster
+```{r bicAge,fig.width=8,fig.height=6}
+Aps$bic = Bps$bic = "no"
+Aps$bic[Aps$Gene %in% antGrC$Gene] = "yes"
+Bps$bic[Bps$Gene %in% beeGrC$Gene] = "yes"
+Aps$species = "ant"
+Bps$species = "bee"
+psBic = rbind(Aps,Bps)
+p <- ggplot(psBic[!is.na(psBic$psName),],aes(x = psName,fill=bic))+
+  geom_bar(stat="count",position="fill")+
+  facet_wrap(. ~ species)+
+  xlab("phylostrata")+
+  ylab("proportion of genes")+
+  theme(axis.text = element_text(angle=90))+
+  scale_fill_discrete(name = "in bicluster?")
+p
+ggsave(p,file = "figures/p10.pdf",height=6,width=8)
+```
+
 
 ## 2.2 Specific genes within the bicluster
 - holding off plotting specific genes for now
@@ -565,14 +780,82 @@ p2 = biasPlot(BsexRes[[3]][[1]],BcasteRes[[3]][[1]],"gene_Amel")+
   ylab("bee caste bias (queen/worker)")+
   xlab("bee sex bias (queen/male)")
 grid.arrange(p1,p2,nrow=1)
+p =arrangeGrob(p1,p2,nrow=1)
+ggsave(p,file = "figures/p11.pdf",height=6,width=12)
+```
+
+## Sex bias vs caste bias in all tissues
+```{r sexHeadThorax}
+FCcor <- function(test1,test2){
+  FC = merge(test1[[1]],test2[[1]],by = "Gene")
+  r = cor.test(FC$FC.x,FC$FC.y)
+  return(c(r$estimate,c1=r$conf.int[1],c2=r$conf.int[2]))
+}
+
+Acor <- ldply(lapply(seq(1,3),function(i){
+  FCcor(AcasteRes[[i]],AsexRes[[i]])
+}))
+
+Bcor <- ldply(lapply(seq(1,3),function(i){
+  FCcor(BcasteRes[[i]],BsexRes[[i]])
+}))
+
+Acor$tissue = Bcor$tissue = c("head","thorax","abdomen")
+Acor$species = "ant"
+Bcor$species = "bee"
+AllCor = rbind(Acor,Bcor)
+AllCor$tissue=factor(AllCor$tissue,levels = c("head","thorax","abdomen"))
+
+p <- ggplot(AllCor,aes(x=species,y=cor,fill=tissue))+
+  geom_bar(stat="identity",position=position_dodge())+
+  geom_errorbar(aes(ymin=c1,ymax=c2),position = position_dodge(.9),width=0.2)+
+  main_theme+
+  ylim(0,1)+
+  ylab("correlation of caste and sex bias")+
+  theme(legend.title = element_text(size=18,face="bold"),
+        legend.position = c(0.1,0.9))
+ggsave(p,file = "figures/p12.pdf",height=6,width=8)
+p
+```
+
+## Sex bias vs caste bias for nurses and foragers
+```{r sexNF,fig.height=6,fig.width=8}
+AsocRes <- lapply(antSocial,extractBias)
+BsocRes <- lapply(beeSocial,extractBias)
+
+Acor <- ldply(lapply(seq(1,3),function(i){
+  FCcor(AsocRes[[i]],AsexRes[[i]])
+}))
+
+Bcor <- ldply(lapply(seq(1,3),function(i){
+  FCcor(BsocRes[[i]],BsexRes[[i]])
+}))
+
+Acor$tissue = c("head","thorax","abdomen")
+Bcor$tissue = c("head","thorax","abdomen")
+Acor$species = "ant"
+Bcor$species = "bee"
+AllCor = rbind(Acor,Bcor)
+AllCor$tissue=factor(AllCor$tissue,levels = c("head","thorax","abdomen"))
+
+p <- ggplot(AllCor,aes(x=species,y=cor,fill=tissue))+
+  geom_bar(stat="identity",position=position_dodge())+
+  geom_errorbar(aes(ymin=c1,ymax=c2),position = position_dodge(.9),width=0.2)+
+  main_theme+
+  ylim(-0.2,0.1)+
+  ylab("correlation of sex (queen/male)\nand behavior bias (nurse/forager)")+
+  theme(legend.title = element_text(size=18,face="bold"),
+        legend.position = c(0.1,0.9))
+ggsave(p,file = "figures/p19.pdf",height=6,width=8)
+p
 ```
 
 ## 3.2 Comparison to D. melanogaster
 ```{r DmelComp,fig.height=6,fig.width=6}
 DmelSC = merge(sexGenes,ogg11,by="gene_Amel")
-DmelSC$abdDE = factor(DmelSC$abdDE,levels = c("conserved queen","conserved worker","non-DE/inconsistent"))
+DmelSC$abdDE = factor(DmelSC$abdDE,levels = c("conserved queen","conserved worker","non-conserved/non-DE"))
 
-p4 <- ggplot(DmelSC[grepl("conserved",DmelSC$abdDE),],aes(x = abdDE,y=-logFC))+
+p4 <- ggplot(DmelSC[!grepl("non-conserved",DmelSC$abdDE),],aes(x = abdDE,y=-logFC))+
   geom_violin(fill="grey90",trim=FALSE)+
   geom_jitter(width = 0.1,size=0.5,aes(color=abdDE))+
   geom_boxplot(width=0.05,outlier.shape = NA,fill="black",color="black",notch=TRUE,notchwidth = 0.7)+
@@ -588,6 +871,16 @@ p4 <- ggplot(DmelSC[grepl("conserved",DmelSC$abdDE),],aes(x = abdDE,y=-logFC))+
                fun.data = function(x){c(y=median(x), ymin=median(x), ymax=median(x))})+
   coord_cartesian(ylim = c(-8,8))
 p4
+ggsave(p4,file = "figures/p13.pdf",height=6,width=6)
+
+Dmel_male = DmelSC$gene_Amel[DmelSC$FDR < 0.05 & DmelSC$logFC > 0]
+Dmel_female = DmelSC$gene_Amel[DmelSC$FDR < 0.05 & DmelSC$logFC < 0]
+cQ = DmelSC$gene_Amel[DmelSC$abdDE=="conserved queen"]
+cW = DmelSC$gene_Amel[DmelSC$abdDE=="conserved worker"]
+Gtype = list(Dmel_m=Dmel_male,Dmel_f=Dmel_female,conQ=cQ,conW=cW)
+
+p <- venn.diagram(Gtype,filename=NULL)
+ggsave(p,file="figures/p14.pdf")
 ```
 
 ##Development section
@@ -612,6 +905,8 @@ p <- ggplot(DmelSC[!grepl("ant",DmelSC$abdDE),],aes(x = abdDE,fill=develSex))+
   ylab("proportion")+
   xlab("abdominal caste bias")
 p
+ggsave(p,file = "figures/p16.pdf",height=8,width=10)
+
 ```
 
 ## -log(P-value) for genes with conserved abdominal differential expression
@@ -636,6 +931,9 @@ p2 <- ggplot(bD[!grepl("ant",bD$abdDE),],aes(x = abdDE,y=-log(PValue)))+
   ggtitle("devel measured in bee")
 
 grid.arrange(p1,p2,nrow=1)
+p = arrangeGrob(p1,p2,nrow=1)
+ggsave(p,file = "figures/p15.pdf",height=8,width=10)
+
 ```
 
 
@@ -700,6 +998,9 @@ p4 <- cbPlot(cbBps,"behavior","bee")
 
 grid.arrange(p1,p3,nrow=1)
 grid.arrange(p2,p4,nrow=1)
+p <- arrangeGrob(p1,p2,p3,p4,nrow=2)
+ggsave(p,file="figures/p22.pdf",height=12,width=12)
+
 ```
 
 ## 4.2 Caste/Behavior bias vs phylostrata
@@ -726,6 +1027,8 @@ p4 <- phPlot(cbBps,"behavior","bee")
 
 grid.arrange(p1,p3,nrow=1)
 grid.arrange(p2,p4,nrow=1)
+p <- arrangeGrob(p1,p2,p3,p4,nrow=2)
+ggsave(p,file="figures/p21.pdf",height=12,width=12)
 ```
 ## 4.3 Caste bias vs tissue specificity
 -tissue specificity is estimated across 12 honey bee tissues.
@@ -745,7 +1048,29 @@ p1 <- ggplot(bT,aes(x=tau,y=cb))+
         legend.text = element_text(size=20),
         legend.title=element_blank())
 p1
+ggsave(p1,file="figures/p23.pdf",height=8,width=8)
 ```
 
+## Comparison of caste and behavior bias between species
+```{r bias between}
+cbBias = merge(beeCB,ACUogg,by.x="Gene",by.y="gene_Amel")
+cbBias = merge(cbBias,antCB,by.x="gene_Mphar",by.y="Gene")
+cbBias = cbBias[!is.na(cbBias$OGGacu),]
+socBias = merge(beeSB,ACUogg,by.x="Gene",by.y="gene_Amel")
+socBias = merge(socBias,antSB,by.x="gene_Mphar",by.y="Gene")
+socBias = socBias[!is.na(socBias$OGGacu),]
+p3 <- ggplot(cbBias,aes(x=cb_noAdult.x,y=cb_noAdult.y))+
+  geom_point(size=2,alpha=0.3)+
+  geom_smooth(method="lm",se=FALSE,color="red")+
+  main_theme+xlab("bee caste bias")+ylab("ant caste bias")
 
+p4 <- ggplot(socBias,aes(x=cb.x,y=cb.y))+
+  geom_point(size=2,alpha=0.3)+
+  geom_smooth(method="lm",se=FALSE,color="red")+
+  scale_x_continuous(breaks = c(0,1,2))+
+  main_theme+xlab("bee behavioral bias")+ylab("ant behavior bias")
+
+p <- arrangeGrob(p3,p4,nrow=1)
+ggsave(p,file="figures/p20.pdf",width=12,height=7)
+```
 
