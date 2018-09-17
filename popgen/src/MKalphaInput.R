@@ -1,3 +1,8 @@
+#!/usr/bin/env Rscript
+args = commandArgs(trailingOnly=TRUE)
+
+prefix = args[1]
+
 load("../data/DEtests.RData")
 beeSub <- read.csv("../out/substitutions.csv")
 beeMK = beeSub[,c(2,6,3,7,4,6,5,7)]
@@ -15,7 +20,7 @@ addClass <- function(DEdat,sub,mk,species){
   mk$V10 = rep(1,nrow(mk))
   mk$V10[sub$Gene %in% DEdat$Gene[DEdat[,2]=="queen"]] = 2
   mk$V10[sub$Gene %in% DEdat$Gene[DEdat[,2]=="worker"]] = 3
-  write.table(mk,file = paste("../MK_alpha_input/",names(DEdat)[2],".",species,".csv",sep = ""),col.names = FALSE,row.names = FALSE,sep=",")
+  write.table(mk,file = paste(prefix,names(DEdat)[2],".",species,".csv",sep = ""),col.names = FALSE,row.names = FALSE,sep=",")
 }
 
 sapply(c(2:ncol(beeRes[[2]])),function(x) addClass(beeRes[[2]][,c(1,x)],beeSub,beeMK,"bee"))

@@ -13,8 +13,7 @@ GROUPS, = glob_wildcards("../var/apis_bigStudy/{group}.vcf")
 rule all:
 	input: expand("../out/reordered_alpha_locusF_{stage}.bee.csv",stage=STAGE),
 			"../out/MKtest_globalAlpha_locusF_bee_reordered",
-			"../out/apis_reordered.gene.pi.csv",
-			"../out/bayesian_results_apis_reordered.csv"
+			"../out/apis_reordered.gene.pi.csv"
 
 
 rule buildBowtie:
@@ -233,28 +232,28 @@ rule tab_subs:
 	output: "../out/substitutions_reordered.csv"
 	shell: "Rscript --vanilla tabulate_substitutions.R {input} {output}"
 
-rule snipre:
-	input: rules.silentReplacement.output, rules.parseSilentReplacement.output,rules.fixedPolymorphic.output
-	output: "../out/bayesian_results_apis_reordered.csv"
-	shell: "Rscript --vanilla snipre.R {input} {output}"
+#rule snipre:
+#	input: rules.silentReplacement.output, rules.parseSilentReplacement.output,rules.fixedPolymorphic.output
+#	output: "../out/bayesian_results_apis_reordered.csv"
+#	shell: "Rscript --vanilla snipre.R {input} {output}"
 
 #Make MKinput files for alpha classes (both species)
 rule MKclass_input:
 	input: "../out/substitutions_reordered.csv","../data/DEtests.RData","../data/MpharAnn.csv"
-	output: expand("../MK_alpha_input/{stage}.bee_reordered.csv",stage=STAGE),"../MK_alpha_input/old_abd.csv"
-	shell: "Rscript MKalphaInput.R"
+	output: expand("../MK_alpha_input/reordered_{stage}.bee.csv",stage=STAGE),"../MK_alpha_input/old_abd.csv"
+	shell: "Rscript MKalphaInput.R ../MK_alpha_input/reordered_"
 
 #Calculate constraint from MKtest
 rule MKtest_constraint:
-	input: "../MK_alpha_input/abdomen.bee_reordered.csv"
+	input: "../MK_alpha_input/reordered_abdomen.bee.csv"
 	output: "../out/MKtest_globalAlpha_locusF_bee_reordered"
 	shell: "MKtest -a 1 -f 2 -o {output} {input}"
 
 #Bootstrap MKtest for alpha results (class-specific alpha)
 rule MKtest_alpha:
-	input: "../MK_alpha_input/{stage}.bee_reordered.csv"
+	input: "../MK_alpha_input/reordered_{stage}.bee.csv"
 	output: "../out/reordered_alpha_locusF_{stage}.bee.csv"
-	shell: "MKtest -a 3 -f 2 -P -100 -o {output} {input}"
+	shell: "MKtest -a 3 -f 2 -o {output} {input}"
 
 
 #Combine alpha results
