@@ -214,7 +214,7 @@ rule Check_old:
 rule combineMK:
 	input: expand("../out/alpha_locusF_{stage}.{species}.csv",stage=STAGE,species=SPECIES)
 	output: "../out/collectedAlpha.csv"
-	shell: "Rscript combineAlpha.R ../out/ {output}"
+	shell: "Rscript combineAlpha.R ../out/alpha_locusF_ {output}"
 
 #Calculate pi within honeybee population
 rule calcPi:

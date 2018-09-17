@@ -253,15 +253,15 @@ rule MKtest_constraint:
 #Bootstrap MKtest for alpha results (class-specific alpha)
 rule MKtest_alpha:
 	input: "../MK_alpha_input/{stage}.bee_reordered.csv"
-	output: "../out/alpha_locusF_{stage}.bee_reordered.csv"
+	output: "../out/reordered_alpha_locusF_{stage}.bee.csv"
 	shell: "MKtest -a 3 -f 2 -P -100 -o {output} {input}"
 
 
 #Combine alpha results
 #rule combineMK:
-#	input: expand("../out/alpha_locusF_{stage}.bee_reordered.csv",stage=STAGE)
+#	input: expand("../out/reordered_alpha_locusF_{stage}.bee_reordered.csv",stage=STAGE)
 #	output: "../out/collectedAlpha_bee_reordered.csv"
-#	shell: "Rscript combineAlpha.R ../out/ {output}"
+#	shell: "Rscript combineAlpha.R ../out/reordered_alpha_locusF_ {output}"
 
 #Calculate pi within honeybee population
 rule calcPi:
