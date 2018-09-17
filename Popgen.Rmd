@@ -258,15 +258,17 @@ hist(beeS$BSnIPRE.gamma)
 
 ## Part 3: Positive selection, alpha
 ```{r alpha}
-alpha <- read.csv("results/alphaHead.csv")
-alpha = alpha[alpha$LnL!="LnL",]
-alphaM = melt(alpha[,c(4:8)],id.vars =c("stage","species"))
-alphaM$stage = factor(alphaM$stage,levels = c("larva","pupa","head","thorax","abdomen"))
-alphaM$value = as.numeric(as.character(alphaM$value))
-levels(alphaM$variable) = c("nonDE","queen","worker")
+alpha <- read.csv("results/collectedAlpha.csv")
+colnames(alpha)[1:3] = c("nonDE","queen","worker")
+alphaM = melt(alpha,id.vars =c("stage","species"))
+colnames(alphaM)[3:4] = c("value","alpha")
+aD = calcMean(alphaM,"alpha")
 
-ggplot(alphaM,aes(x = stage,y=value,fill=variable))+
-  geom_bar(stat="identity",position = position_dodge())+
-  facet_wrap(. ~ species)
+ggplot(aD,aes(x = stage,fill=value,y=mean))+
+  geom_bar(stat="identity",position=position_dodge())+
+  geom_errorbar(aes(ymin=c1,ymax=c2),position=position_dodge(width=0.9),width=0.3)+  
+  facet_wrap(. ~ species)+
+  ylab("alpha")+
+  theme(axis.text.x=element_text(angle=90))
 ```
 
