@@ -155,7 +155,7 @@ rule combineVCF:
 rule rmIndel_all:
 	input: "../var/amel_reordered_allGroups.vcf"
 	output: "../var/amel_reordered_allGroups.snp.recode.vcf"
-	shell: "vcftools --vcf {input} --remove-indels --out ../var/amel_reordered_allGroups.snp --recode --recode-INFO-all"
+	shell: "vcftools --vcf {input} --remove-indels --max-missing 0.9 --mac 1 --max-alleles 2 --out ../var/amel_reordered_allGroups.snp --recode --recode-INFO-all"
 
 rule allelicPrimitives_all:
 	input: "../var/amel_reordered_allGroups.snp.recode.vcf"
@@ -187,11 +187,16 @@ rule tabixAllVCF:
 rule addCerana:
 	input: rules.tabixCerana.output,rules.tabixAllVCF.output
 	output: "../var/amel_reordered_allGroups_plusCerana.vcf"
-	shell: "bcftools merge ../var/amel_reordered_cerana_noconflict.vcf.gz ../var/amel_reordered_group_noconflict.vcf.gz > {output}"
+	shell: "bcftools merge ../var/amel_reordered_cerana_noconflict.vcf.gz ../var/amel_reordered_group_noconflict.vcf.gz -O --missing-to-ref > {output}"
+
+rule biallelic:
+	input: rules.addCerana.output
+	output: "../var/amel_reordered_allGroups_plusCerana.recode.vcf"
+	shell: "vcftools --vcf {input} --remove-indels --max-missing 0.9 --mac 1 --max-alleles 2 --out ../var/amel_reordered_allGroups_plusCerana --recode --recode-INFO-all"
 
 # estimate SNP effects
 rule snpEff:
-	input: rules.addCerana.output
+	input: rules.biallelic.output
 	output: "../var/snpEff_reordered.txt"
 	shell: "java -Xmx7g -jar /home/warnerm/local_install/snpEff/snpEff.jar -no-utr -no-upstream -no-intron -no-intergenic -no-downstream amel_reordered {input} >  {output}"
 
@@ -199,7 +204,7 @@ rule snpEff:
 # for this we remove the outgroup and compute frequencies
 #Apis cerana is SRR957079
 rule fixedPolymorphic:	
-	input: rules.addCerana.output
+	input: rules.biallelic.output
 	output: "../var/snps_reordered.csv"
 	shell: """vcftools --vcf {input} --remove-indv cerana --freq; \
     awk -v OFS="," ' NR>1 {{split($5,a,":"); if((a[2]=="1") || (a[2]=="0")) state="F"; else state="P"; print $1,$2,state}}' out.frq > {output} """
