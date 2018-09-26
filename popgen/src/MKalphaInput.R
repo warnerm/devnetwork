@@ -2,9 +2,10 @@
 args = commandArgs(trailingOnly=TRUE)
 
 prefix = args[1]
+subFile = args[2]
 
 load("../data/DEtests.RData")
-beeSub <- read.csv("../out/substitutions.csv")
+beeSub <- read.csv(subFile)
 beeMK = beeSub[,c(2,6,3,7,4,6,5,7)]
 beeMK = cbind(beeMK,rep(22,nrow(beeMK)),rep(1,nrow(beeMK)))
 

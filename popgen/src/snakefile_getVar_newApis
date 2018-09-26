@@ -1,4 +1,4 @@
-THREADS = 20
+THREADS = 5
 REF = "../ref/amel_ref_reordered.fa"
 GFF = "../ref/amel_reoriented.gff"
 PICARD = "/home/warnerm/local_install/picard.jar"
@@ -187,7 +187,7 @@ rule tabixAllVCF:
 rule addCerana:
 	input: rules.tabixCerana.output,rules.tabixAllVCF.output
 	output: "../var/amel_reordered_allGroups_plusCerana.vcf"
-	shell: "bcftools merge ../var/amel_reordered_cerana_noconflict.vcf.gz ../var/amel_reordered_group_noconflict.vcf.gz -O --missing-to-ref > {output}"
+	shell: "bcftools merge ../var/amel_reordered_cerana_noconflict.vcf.gz ../var/amel_reordered_group_noconflict.vcf.gz --missing-to-ref --threads {THREADS} > {output}"
 
 rule biallelic:
 	input: rules.addCerana.output
@@ -246,7 +246,7 @@ rule tab_subs:
 rule MKclass_input:
 	input: "../out/substitutions_reordered.csv","../data/DEtests.RData","../data/MpharAnn.csv"
 	output: expand("../MK_alpha_input/reordered_{stage}.bee.csv",stage=STAGE),"../MK_alpha_input/old_abd.csv"
-	shell: "Rscript MKalphaInput.R ../MK_alpha_input/reordered_"
+	shell: "Rscript MKalphaInput.R ../MK_alpha_input/reordered_ {input[0]}"
 
 #Calculate constraint from MKtest
 rule MKtest_constraint:
@@ -258,7 +258,7 @@ rule MKtest_constraint:
 rule MKtest_alpha:
 	input: "../MK_alpha_input/reordered_{stage}.bee.csv"
 	output: "../out/reordered_alpha_locusF_{stage}.bee.csv"
-	shell: "MKtest -a 3 -f 2 -o {output} {input}"
+	shell: "MKtest -a 3 -f 2 -P 100 -o {output} {input}"
 
 
 #Combine alpha results
