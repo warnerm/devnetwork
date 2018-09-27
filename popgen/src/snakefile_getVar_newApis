@@ -242,11 +242,18 @@ rule tab_subs:
 #	output: "../out/bayesian_results_apis_reordered.csv"
 #	shell: "Rscript --vanilla snipre.R {input} {output}"
 
+#Make map of new annotation to old annotation using BLASTN
+rule apisMap:
+	input: "../ref/cds_reordered.fa","../ref/cds.fa"
+	output: "../out/apis_map_reordered.txt"
+	shell: "makeblastdb -in {input[0]} -dbtype nucl; python2.7 pairwiseBlast.py -s {input[1]} -d {input[0]} -t {THREADS} -o {output}"
+
+
 #Make MKinput files for alpha classes (both species)
 rule MKclass_input:
-	input: "../out/substitutions_reordered.csv","../data/DEtests.RData","../data/MpharAnn.csv"
-	output: expand("../MK_alpha_input/reordered_{stage}.bee.csv",stage=STAGE),"../MK_alpha_input/old_abd.csv"
-	shell: "Rscript MKalphaInput.R ../MK_alpha_input/reordered_ {input[0]}"
+	input: "../out/substitutions_reordered.csv","../data/DEtests.RData","../out/apis_map_reordered.txt"
+	output: expand("../MK_alpha_input/reordered_{stage}.bee.csv",stage=STAGE)
+	shell: "Rscript MKalphaInput_reordered.R ../MK_alpha_input/reordered_ {input[0]} {input[2]}"
 
 #Calculate constraint from MKtest
 rule MKtest_constraint:
