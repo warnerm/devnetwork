@@ -251,13 +251,13 @@ rule apisMap:
 rule editMap:
 	input: "../out/apis_map_reordered.txt"
 	output: "../out/apis_map_reordered_edit.txt"
-	shell: """cat {input} | awk '{{print $2"\t"$5}}' | sed 's/gene=//g' > {output}
+	shell: """cat {input} | awk '{{print $2"\t"$5}}' | sed 's/gene=//g' > {output}"""
 
 #Make MKinput files for alpha classes (both species)
 rule MKclass_input:
 	input: "../out/substitutions_reordered.csv","../data/DEtests.RData","../out/apis_map_reordered_edit.txt"
 	output: expand("../MK_alpha_input/reordered_{stage}.bee.csv",stage=STAGE)
-	shell: "Rscript MKalphaInput_reordered.R ../MK_alpha_input/reordered_ {input[0]} {input[2]}"
+	shell: "Rscript MKalphaInput_newApis.R ../MK_alpha_input/reordered_ {input[0]} {input[2]}"
 
 #Calculate constraint from MKtest
 rule MKtest_constraint:
