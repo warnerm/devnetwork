@@ -16,9 +16,48 @@ antT <- modifyDF(antT)
 antT = antT[rowSums(antT) > 0,]
 beeT = beeT[rowSums(beeT) > 0,]
 
+genFactor <- function(counts){
+  factors <- data.frame(sample=colnames(counts))
+  factors$stage = 8
+  factors$stage[grepl("_E",factors$sample)]=1
+  factors$stage[grepl("L1",factors$sample)]=2
+  factors$stage[grepl("L2",factors$sample)]=3
+  factors$stage[grepl("L3",factors$sample)]=4
+  factors$stage[grepl("L4",factors$sample)]=5
+  factors$stage[grepl("L5",factors$sample)]=6
+  factors$stage[grepl("P",factors$sample)]=7
+  factors$tissue="larva"
+  factors$tissue[grepl("P",factors$sample)]="pupa"
+  factors$tissue[grepl("_E",factors$sample)]="egg"
+  factors$tissue[grepl("G\\.",factors$sample)]="gaster"
+  factors$tissue[grepl("H\\.",factors$sample)]="head"
+  factors$tissue[grepl("M\\.",factors$sample)]="mesosoma"
+  factors$NF=NA
+  factors$NF[grepl("_N",factors$sample)]="nurse"
+  factors$NF[grepl("_F",factors$sample)]="forager"
+  factors$caste="worker"
+  factors$caste[grepl("_S|_V|_AQ|_G",factors$sample)]="queen"
+  factors$caste[grepl("_M",factors$sample)]="male"
+  factors$VM=NA
+  factors$VM[grepl("_V",factors$sample)]="virgin"
+  factors$VM[grepl("_AQ",factors$sample)]="mated"
+  factors$colony=1
+  factors$colony[grepl(".2",factors$sample)]=2
+  factors$colony[grepl(".3",factors$sample)]=3
+  for (i in 2:7){
+    factors[,i]=as.factor(factors[,i])
+  }
+  rownames(factors)=factors$sample
+  factors$caste = factor(factors$caste,levels = c("queen","male","worker")) #Queen genes will always be down-regulated
+  factors$tissue = factor(factors$tissue,levels = c("egg","larva","pupa","head","mesosoma","gaster"))
+  factors$NF = factor(factors$NF,levels = c("nurse","forager")) #Make nurse genes down-regulated because nurses should look more like queens (under RGPH)
+  return(factors)
+}
+
 #Make factors
 factorA <- genFactor(ant)
 factorB <- genFactor(bee)
+
 
 freq_set <- function(data,maxMod,factor,tpm,type){
   res <- lapply(data,function(x){
@@ -83,7 +122,7 @@ beeQG = beeQG[lapply(beeQG,length) > 0]
 
 aG <- commonGenes(antQG,antT)
 bG <- commonGenes(beeQG,beeT)
-antG = aG$Gene[aG$KeepNum > 0.6] #Keep genes occurring greater than 60% of the time. Note that there appear to be two peaks in the bee data
+antG = aG$Gene[aG$KeepNum > 0.9] #Keep genes occurring greater than 60% of the time. Note that there appear to be two peaks in the bee data
 beeG = bG$Gene[bG$KeepNum > 0.6]
 
 getConn <- function(tpm,genes,DEtests,DEres){
