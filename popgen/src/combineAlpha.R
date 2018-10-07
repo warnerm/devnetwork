@@ -9,8 +9,11 @@ collect <- function(stage,species){
   df <- read.csv(paste(prefix,stage,".",species,".csv",sep=""),sep="\t",head=T)
   #df = df[-c(1:3),]
   #df = df[-seq(1,nrow(df) - 1, by=2),c("alpha.Cat1","alpha.Cat2","alpha.Cat3")]
+  df = df[,c((ncol(df) - 2):ncol(df))]
+  df = df[,c("alpha.Cat1","alpha.Cat2","alpha.Cat3")]
   df$stage=stage
   df$species=species
+  
   return(as.data.frame(df[1,]))
 }
 
