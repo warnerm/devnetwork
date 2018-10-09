@@ -93,9 +93,9 @@ GOcb3 <- lapply(seq(1,4),function(i) cbind(GOcb2[[i]],test=rep(names[i],5)))
 GOcb4 <- do.call(rbind,GOcb3)
 
 # Set theme to allow for plotmath expressions
-tt <- ttheme_default(colhead=list(fg_params = list(parse=TRUE)),base_size = 16)
+tt <- ttheme_default(colhead=list(fg_params = list(parse=FALSE)),base_size = 16)
 tbl <- tableGrob(GOcb4, rows=NULL, theme=tt)
-ggsave(tbl,file = "~/GitHub/devnetwork/figures/GOcbTable.png",height=12,width=8,dpi=300)
+ggsave(tbl,file = "~/GitHub/devnetwork/figures/GOcbTable.png",height=8,width=12,dpi=300)
 
 AcasteRes <- lapply(antTests_oneLarv[c(3:5)],extractBias)
 BcasteRes <- lapply(beeTests_oneLarv[c(3:5)],extractBias)
@@ -121,9 +121,9 @@ GOcb3 <- lapply(seq(1,2),function(i) cbind(GOcb2[[i]],test=rep(names[i],5)))
 GOcb4 <- do.call(rbind,GOcb3[c(3,4,1,2)])
 
 # Set theme to allow for plotmath expressions
-tt <- ttheme_default(colhead=list(fg_params = list(parse=TRUE)),base_size = 16)
+tt <- ttheme_default(colhead=list(fg_params = list(parse=FALSE)),base_size = 16)
 tbl <- tableGrob(GOcb4, rows=NULL, theme=tt)
-ggsave(tbl,file = "~/GitHub/devnetwork/figures/GO_conDE_Table.png",height=12,width=10,dpi=300)
+ggsave(tbl,file = "~/GitHub/devnetwork/figures/GO_conDE_Table.png",height=9,width=12,dpi=300)
 
 
 ###Coptying from Figures_IUSSI.R
@@ -149,9 +149,9 @@ GOcb2 <- lapply(bicGO,function(x) x[c(1:5),c(1,2,6)])
 names = c("ant","bee","conserved")
 GOcb3 <- lapply(seq(1,3),function(i) cbind(GOcb2[[i]],test=rep(names[i],5)))
 GOcb4 <- do.call(rbind,GOcb3)
-tt <- ttheme_default(colhead=list(fg_params = list(parse=TRUE)),base_size = 16)
+tt <- ttheme_default(colhead=list(fg_params = list(parse=FALSE)),base_size = 16)
 tbl <- tableGrob(GOcb4, rows=NULL, theme=tt)
-ggsave(tbl,file = "~/GitHub/devnetwork/figures/GO_Bicluster.png",height=12,width=10,dpi=300)
+ggsave(tbl,file = "~/GitHub/devnetwork/figures/GO_Bicluster.png",height=9,width=14,dpi=300)
 
 
 v1 = antPlaid$conn
@@ -162,13 +162,13 @@ v1 = DmelOrtho(v1,"gene_Mphar")
 v2 = DmelOrtho(v2, "gene_Amel")
 ConGO <- lapply(list(v1,v2),GSEAfunc)
 
-GOcb2 <- lapply(bicGO,function(x) x[c(1:5),c(1,2,6)])
-names = c("ant","bee","conserved")
+GOcb2 <- lapply(ConGO,function(x) x[c(1:5),c(1,2,6)])
+names = c("ant","bee")
 GOcb3 <- lapply(seq(1,3),function(i) cbind(GOcb2[[i]],test=rep(names[i],5)))
 GOcb4 <- do.call(rbind,GOcb3)
-tt <- ttheme_default(colhead=list(fg_params = list(parse=TRUE)),base_size = 16)
+tt <- ttheme_default(colhead=list(fg_params = list(parse=FALSE)),base_size = 16)
 tbl <- tableGrob(GOcb4, rows=NULL, theme=tt)
-ggsave(tbl,file = "~/GitHub/devnetwork/figures/GO_Bicluster2.png",height=12,width=10,dpi=300)
+ggsave(tbl,file = "~/GitHub/devnetwork/figures/GO_Bicluster2.png",height=9,width=14,dpi=300)
 
 
 

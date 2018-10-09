@@ -10,6 +10,7 @@ beeSub <- read.csv(subFile)
 map = read.table(mapFile,head=F)
 colnames(map) = c("Gene","old_gene")
 beeSub = merge(beeSub,map,by="Gene")
+beeSub = beeSub[beeSub$FS > 0 & beeSub$FN > 0 & beeSub$PS > 0,]
 
 mk = beeSub[,c(2,6,3,7,4,6,5,7)]
 mk = cbind(mk,rep(496,nrow(mk)),rep(1,nrow(mk)))

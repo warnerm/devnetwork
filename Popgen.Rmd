@@ -206,12 +206,14 @@ ggplot(f,aes(x = stage,fill=value,y=mean))+
   theme(axis.text.x=element_text(angle=90))
 
 # #pi (just bees)
-Bpi = merge(beePi,allS,by="Gene")
+Bpi = merge(beePi,beeS,by="Gene")
 p = calcMean(droplevels(Bpi),"pi")
+
+ggplot(Bpi,aes(x=variable,y=pi,fill=value))+geom_boxplot()
+
 ggplot(p,aes(x = stage,fill=value,y=mean))+
   geom_bar(stat="identity",position=position_dodge())+
   geom_errorbar(aes(ymin=c1,ymax=c2),position=position_dodge(width=0.9),width=0.3)+  
-  facet_wrap(. ~ species)+
   ylab("pi")+
   theme(axis.text.x=element_text(angle=90))
 ```

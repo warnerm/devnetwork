@@ -157,6 +157,8 @@ pl <- lapply(list(CasteCor[[1]],CasteCor_allStage[[1]],BehavCor[[1]]), function(
 pl[[3]] = pl[[3]]+xlab("tissue")+
   ylab("correlation of nurse/forager log2 fold-change")
 
+do.call(grid.arrange,c(pl,nrow=1))
+
 p <- arrangeGrob(pl[[1]]+annotate("text",x=1,y=0.25,label="A",size=14),
                  pl[[2]]+annotate("text",x=1,y=0.25,label="B",size=14),
                  ncol=2)
