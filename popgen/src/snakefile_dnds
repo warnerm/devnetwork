@@ -1,0 +1,45 @@
+REF= "../data/GCA_000002195.1_Amel_4.5_genomic.fna"
+GFF = "../data/GCA_000002195.1_Amel_4.5_genomic.gff"
+GATK = "/home/warnerm/local_install/GenomeAnalysisTK.jar"
+
+rule all:
+	input: "../results/cerana_dnds.txt"
+
+# select consensus sites
+rule consensusFilter:
+     input: "../var/freebayes.snp.primatives.sorted.vcf","../var/consensus.vcf.pos"
+     output: "../var/final.recode.vcf"
+     shell: "vcftools --vcf {input[0]} --positions {input[1]} --remove-indels --recode --mac 1 --out  ../var/final"
+
+rule selectCerana:
+	input: "../var/final.recode.vcf"
+	output: "../var/final.cerana.recode.vcf"
+	shell: "vcftools --vcf {input} --indv SRR957079 --max-alleles 2 --recode --mac 1 --out --recode-INFO-all ../var/final.cerana"
+
+rule tabix: 
+	input: "../var/final.cerana.recode.vcf"
+	output: "../var/final.cerana.recode.vcf.gz","../var/final.cerana.recode.vcf.gz.tbi"
+	shell: "bgzip {input}; tabix -p vcf {input}.gz"
+
+rule getFasta:
+	input: "../var/final.cerana.recode.vcf.gz"
+	output: "../data/cerana.fa"
+	shell: "cat {REF} | vcf-consensus {input} > {output}"
+
+#extract cds from both species
+rule extractGenes:
+	input: "../data/cerana.fa"
+	output: "../data/cerana.cds.fa","../data/mellifera.cds.fa"
+	version: "1.0"
+	shell: """gffread {GFF} -g {input} -x {output[0]}; \
+	gffread {GFF} -g {REF} -x {output[1]}"""
+
+
+
+# run pairwise dnds using paml
+rule dnds:
+	input: "../data/cerana.cds.sorted.fa", "../data/mellifera.cds.sorted.fa"
+	output: "../results/cerana_dnds.txt"
+	shell: "python2.7 dnds.py {input} > {output}"
+
+# run paml on amino acid sequences to get branch lengths
