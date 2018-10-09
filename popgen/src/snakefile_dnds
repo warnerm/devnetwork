@@ -3,7 +3,7 @@ GFF = "../data/GCA_000002195.1_Amel_4.5_genomic.gff"
 GATK = "/home/warnerm/local_install/GenomeAnalysisTK.jar"
 
 rule all:
-	input: "../results/cerana_dnds.txt"
+	input: "../results/cerana_dnds_filtered.txt"
 
 # select consensus sites
 rule consensusFilter:
@@ -35,11 +35,43 @@ rule extractGenes:
 	gffread {GFF} -g {REF} -x {output[1]}"""
 
 
-
 # run pairwise dnds using paml
 rule dnds:
-	input: "../data/cerana.cds.sorted.fa", "../data/mellifera.cds.sorted.fa"
-	output: "../results/cerana_dnds.txt"
+	input: "../data/cerana.cds.fa", "../data/mellifera.cds.fa"
+	output: "../temp/cerana_dnds.txt"
 	shell: "python2.7 dnds.py {input} > {output}"
+
+rule getLongest:
+	input: "../data/mellifera.cds.fa"
+	output: "../data/longest_isos.txt"
+	shell: "python2.7 get_longest.py {input} {output}"
+
+rule filter_dnds: 
+	input: "../temp/cerana_dnds.txt","../data/longest_isos.txt"
+	output: "../results/cerana_dnds_filtered.txt"
+	shell: "Rscript filter_dnds.R {input} {output}"
+
+#Get ODB9 protein files
+rule ODB9_getData:
+	output: "../data/ref_Mphar.fa","../data/ref_Amel.fa","../data/ref_Nvit.fa"
+	shell:
+
+# makeBlastDB for the protein files from ODB9
+rule makeBlastDB:
+	input: "../data/ref_{ref}.fa"
+	output: "../temp/ref_{ref}.phr"
+	shell: "makeblastdb -in {input} -dbtype prot -out ../temp/{wildcards.ref}"
+
+#Perform genome-wide pairwise blast. *_prot.fa files are the latest protein coding files
+rule pairwiseBlast:
+	input: ref="../temp/{ref}.phr",test="../data/{test}_prot.fa"
+	output: "../out/{ref}_{test}_blastRes.tab"
+	shell: "module load python/anaconda/2.7; python pairwiseBlast.py -s {input[test]} -d {input[ref]} -t {THREADS} -o {output}"
+
+# Get OGGs for Amel/Mphar/Nvit
+rule endOGG:
+	input: geneList="../out/{ref}_{test}_blastRes.tab", oggList="../temp/{ref}.tab"
+	output: "../out/{test}_{ref}_END"
+	shell: "module load python/anaconda/2.7; sed 's/gnl.* //' {input[geneList]} | awk {{'print$2'}} | sort | uniq > ../temp/geneEdit; python2.7 getOGG.py ../temp/geneEdit {output} {THREADS} {input[oggList]} EOG090R"
 
 # run paml on amino acid sequences to get branch lengths
