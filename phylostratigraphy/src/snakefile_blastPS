@@ -16,6 +16,11 @@ rule getGenes:
 	output: "../temp/{test}_allProt"
 	shell: """grep ">" {input} | tr -d ">" > {output}"""
 
+rule makeBlastDB:
+	input: "../data/extraRef/{ref}.fa"
+	output: "../temp/{ref}.phr"
+	shell: "makeblastdb -in {input} -dbtype prot -out ../temp/{wildcards.ref}"
+
 #Perform genome-wide pairwise blast
 rule pairwiseBlast:
 	input: ref="../temp/{ref}.phr",test="../data/{test}_prot.fa"
