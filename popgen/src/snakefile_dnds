@@ -1,12 +1,12 @@
-REF= "../ref/GCF_000002195.1_Amel_4.5_genomic.fna"
-GFF = "../ref/GCF_000002195.1_Amel_4.5_genomic.gff"
+REF= "../ref/GCF_000002195.4_Amel_4.5_genomic.fna"
+GFF = "../ref/GCF_000002195.4_Amel_4.5_genomic.gff"
 GATK = "/home/warnerm/local_install/GenomeAnalysisTK.jar"
 CERANA = "../temp/alignments/africa_cerana/rg_added/SRR957079.bam" #A. cerana aligned to Amel_4.5
 CALLER=["freebayes", "GATK", "samtools"]  
 
 
 rule all:
-	input: "../data/cerana/cerana.fa"
+	input: "../results/cerana_dnds_filtered.txt"
 
 rule freeBayes:
 	input:	CERANA
@@ -16,7 +16,13 @@ rule freeBayes:
 rule GATK:
 	input:	CERANA
 	output: "../data/cerana/GATK.vcf"
-	shell:	"java  -Xmx30g -jar {GATK} -nct 12 -allowPotentiallyMisencodedQuals  -T HaplotypeCaller -R  {REF} -I {input} -hets 0.002  -mbq 20 -o {output} --max_alternate_alleles 2"
+	shell: """export PATH=~/local_install/jdk1.8.0_05/bin:$PATH; gatk --java-options "-Xmx30g" HaplotypeCaller \
+				-R {REF} \
+				-I {input} \
+				-O {output} \
+				--heterozygosity 0.002 \
+				--mbq 20 \
+				--max-alternate-alleles 2"""
 
 rule samtools:
 	input:	CERANA
@@ -26,67 +32,77 @@ rule samtools:
 rule allelicPrimitives:
 	input: "../data/cerana/{VCFcaller}.vcf"
 	output: "../data/cerana/{VCFcaller}.primitives.vcf"
-	shell: "java -Xmx14g -jar $GATK -T VariantsToAllelicPrimitives -R {REF} --variant {input} -o {output}"
+	shell: "java -Xmx14g -jar {GATK} -T VariantsToAllelicPrimitives -R {REF} --variant {input} -o {output}"
 
 # generate consensus SNP calls
 rule BAYSIC: 	
 	input: expand("../data/cerana/{VCFcaller}.primitives.vcf", VCFcaller=CALLER)
-	output: "../data/cerana/consensus.vcf"
-	version: "1.0"
+	output: "../data/cerana/consensus.vcf.pos","../data/cerana/consensus.vcf"
 	run: 
 		infiles = "".join([" --vcf " + i for i in input])
-		shell("baysic.pl --statsOutFile ../data/cerana/combined.stats --pvalCutoff 0.8 {} --countsOutFile ../data/cerana/combined.cts --vcfOutFile {{output}}".format(infiles))
+		shell("perl baysic.pl --statsOutFile ../data/cerana/combined.stats --pvalCutoff 0.8 {} --countsOutFile ../data/cerana/combined.cts --vcfOutFile ../data/cerana/consensus.vcf".format(infiles))
 
-# filter the vcf to get rid of indels and unlikely genotypes
+# select bi-allelic consensus sites
 rule consensusFilter:
-	input: "../data/cerana/consensus.vcf"
-	output: "../data/cerana/consensus.filtered.vcf"
-	version: "1.0"
-	# remove indels and anything with morethan two alleles
-	shell: "module load zlib; vcftools --vcf {input} --max-alleles 2 --remove-indels --recode --stdout  > {output}"
+     input: "../data/cerana/freebayes.primitives.vcf","../data/cerana/consensus.vcf.pos"
+     output: "../data/cerana/final.recode.vcf"
+     shell: "vcftools --vcf {input[0]} --positions {input[1]} --max-alleles 2 --remove-indels --max-missing 0.9 --recode --mac 1 --out  ../data/cerana/final"
 
 # generate new fasta file with consensus SNPs
 rule FastaAlternateReferenceMaker:
-	input: "../data/cerana/consensus.filtered.vcf"
+	input: "../data/cerana/final.recode.vcf"
 	output: "../data/cerana/cerana.fa"
 	version: "1.0"
-	shell: "java -jar $GATK  -T FastaAlternateReferenceMaker -R {REF} --variant {input} -o {output}"
+	shell: "export PATH=~/local_install/jdk1.8.0_05/bin:$PATH; java -jar {GATK}  -T FastaAlternateReferenceMaker -R {REF} --variant {input} -o {output}"
+
+rule editName:
+	input: "../data/cerana/cerana.fa"
+	output: "../data/cerana/cerana_edit.fa"
+	shell: "cat {input} | sed 's/>[0-9][0-9]* />/' | sed 's/:.*//' > {output}"
 
 
-#rule getFasta:
-#	input: "../var/final.cerana.recode.vcf.gz"
-#	output: "../data/cerana.fa"
-#	shell: "cat {REF} | vcf-consensus {input} > {output}"
+#mask genomic regions with no coverage
+rule noCoverage:
+	input: CERANA
+	output: "../data/cerana/no_coverage.bed"
+	version: "1.0"
+	shell: "samtools view -q 20 -F 1024 -u  {input} | genomeCoverageBed -ibam - -bga |grep -w 0$ > {output}" # exclude poor mapping, not primary alignment and duplicate
+
+rule maskLowCoverage:
+	input: "../data/cerana/cerana_edit.fa", "../data/cerana/no_coverage.bed"
+	output: "../data/cerana/cerana.masked.fa"
+	shell: "maskFastaFromBed -fi {input[0]} -bed {input[1]} -fo {output}"
+
 
 #extract cds from both species
-#rule extractGenes:
-#	input: "../data/cerana.fa"
-#	output: "../data/cerana.cds.fa","../data/mellifera.cds.fa"
-#	version: "1.0"
-#	shell: """gffread {GFF} -g {input} -x {output[0]}; \
-#	gffread {GFF} -g {REF} -x {output[1]}"""
+rule extractGenes:
+	input: "../data/cerana/cerana.masked.fa"
+	output: "../data/cerana/cerana.cds.fa","../data/cerana/mellifera.cds.fa"
+	version: "1.0"
+	shell: """gffread {GFF} -g {input} -x {output[0]}; \
+	gffread {GFF} -g {REF} -x {output[1]}"""
 
 
 # run pairwise dnds using paml
-#rule dnds:
-#	input: "../data/cerana.cds.fa", "../data/mellifera.cds.fa"
-#	output: "../data/cerana_dnds.txt"
-#	shell: "python2.7 dnds.py {input} > {output}"
+rule dnds:
+	input: "../data/cerana/cerana.cds.fa", "../data/cerana/mellifera.cds.fa"
+	output: "../data/cerana/cerana_dnds.txt"
+	shell: "python2.7 dnds.py {input} {output}"
 
-#rule getMap:
-#	input: "../data/mellifera.cds.fa"
-#	output: "../data/map"
-#	shell: "grep ">" {input} | sed 's/>//' | sed 's/gene=//' > {output}"
+rule getMap:
+	input: "../data/cerana/mellifera.cds.fa"
+	output: "../data/cerana/map"
+	shell: """grep ">" {input} | sed 's/>//' | sed 's/gene=//' > {output}"""
 
-#rule getLongest:
-#	input: "../data/mellifera.cds.fa"
-#	output: "../data/longest_isos.txt"
-#	shell: "python2.7 get_longest.py {input} {output}"
+rule getLongest:
+	input: "../data/cerana/mellifera.cds.fa"
+	output: "../data/cerana/longest_isos.txt"
+	shell: "python2.7 get_longest.py {input} {output}"
 
-#rule filter_dnds: 
-#	input: "../data/cerana_dnds.txt","../data/longest_isos.txt","../data/map"
-#	output: "../results/cerana_dnds_filtered.txt"
-#	shell: "Rscript filter_dnds.R {input} {output}"
+rule filter_dnds: 
+	input: "../data/cerana/cerana_dnds.txt","../data/cerana/longest_isos.txt","../data/cerana/map"
+	output: "../results/cerana_dnds_filtered.txt"
+	shell: "Rscript filter_dnds.R {input} {output}"
 
 #Get ODB9 protein files
 #rule ODB9_getData:
