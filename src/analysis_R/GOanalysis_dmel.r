@@ -47,6 +47,18 @@ GSEAfunc <- function(d){
   return(allRes) 
 }
 
+GSEAfunc2 <- function(d){
+  GOdata <- new("topGOdata",
+                description="Simple session",ontology="BP",
+                allGenes=d,geneSel=selectConn,
+                annot=annFUN.gene2GO,gene2GO=new)
+  
+  #Use scoreOrder = "decreasing" because the higher connection strengths are what we are after
+  resultKS <- runTest(GOdata, algorithm = "classic", statistic = "ks",scoreOrder="increasing")
+  allRes <- GenTable(GOdata,P=resultKS,numChar=100)
+  return(allRes) 
+}
+
 GOfunc <- function(d){
   GOdata <- new("topGOdata",
                 description="Simple session",ontology="BP",
@@ -169,6 +181,27 @@ GOcb4 <- do.call(rbind,GOcb3)
 tt <- ttheme_default(colhead=list(fg_params = list(parse=FALSE)),base_size = 16)
 tbl <- tableGrob(GOcb4, rows=NULL, theme=tt)
 ggsave(tbl,file = "~/GitHub/devnetwork/figures/GO_Bicluster2.png",height=9,width=14,dpi=300)
+
+stageGO <- function(df,col,spec){
+  c1 = df[,col]
+  names(c1) = df$Gene
+  DmelO <- DmelOrtho(c1,spec)
+  GOres <- GSEAfunc2(DmelO)
+  GOcb2 <- GOres[c(1:5),c(1,2,6)]
+  GOcb3 <- cbind(GOcb2,test=rep(names(df)[col],5))
+  return(GOcb3)
+}
+
+nfAnt= ldply(lapply(c(2:4),function(i) stageGO(antSocRes[[3]],i,"gene_Mphar")))
+nfBee= ldply(lapply(c(2:4),function(i) stageGO(beeSocRes[[3]],i,"gene_Amel")))
+nfGOs = rbind(nfAnt,nfBee)
+tt <- ttheme_default(colhead=list(fg_params = list(parse=FALSE)),base_size = 16)
+tbl <- tableGrob(nfAnt, rows=NULL, theme=tt)
+ggsave(tbl,file = "~/GitHub/devnetwork/figures/GO_nf_ant.png",height=10,width=14,dpi=300)
+tbl <- tableGrob(nfBee, rows=NULL, theme=tt)
+ggsave(tbl,file = "~/GitHub/devnetwork/figures/GO_nf_bee.png",height=10,width=14,dpi=300)
+
+
 
 
 
