@@ -6,7 +6,7 @@
 
 import pandas as pd 
 from subprocess import call
-sra = pd.read_csv('drosophila_sra.csv')
+sra = pd.read_csv('../../data/drosophila_sra.csv')
 keys = sra.iloc[:,0]
 
 #Fastq-dump commands from https://edwards.sdsu.edu/research/fastq-dump/
