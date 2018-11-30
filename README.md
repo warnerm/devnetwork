@@ -10,6 +10,7 @@ Prior to running scripts dealing with figures (src/analysis_R/submission_figures
   
 **This list is detailed and implemented in the file complete.snake
 
-Evolutionary data can be found here. Download, unpack, and put the evolution/ directory in data/. 
+Evolutionary data can be found here: https://www.dropbox.com/s/ug1jsyv5zm5xy2g/evolution_data.tar.gz?dl=0. 
+Download, unpack, and put the evolution/ directory in data/. 
 
 Software required:
