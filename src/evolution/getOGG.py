@@ -1,4 +1,4 @@
-#Get metazoan OGG given a list of odb9 genes
+#Get OGGs from a particular heirarchical category given a list of odb9 genes
 from joblib import Parallel, delayed
 import numpy as np, sys, re, pandas as pd
 
@@ -10,11 +10,10 @@ OGGmap = sys.argv[4]
 OGGlev = sys.argv[5]
 
 def getMet(gene,outfile,OGGlev):
-	#gene = re.split('\t',gene_line)[1].strip()
 	with open(OGGmap) as ogMap:
 		for line in ogMap:
 			if gene in line:
-				if OGGlev in line: #All metazoan OGGs start with this
+				if OGGlev in line: #Restrict search to whatever level we care about
 					with open(outfile,'a') as out:
 						out.write(gene.strip()+'\t'+re.split('\t',line)[0]+'\n')
 

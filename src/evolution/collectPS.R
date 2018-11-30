@@ -1,10 +1,9 @@
-setwd("~/GitHub/devnetwork/phylostratigraphy/src/")
 #Merge phylostrata results
 mergeRes2 <- function(tax_id,species,taxNames,fullName,psFile){
-  TGmap <- read.table(paste("../out/TGmap_",species,".txt",sep=""))
-  blast <- read.table(paste("../out/",tax_id,"_",species,"_blastRes.tab",sep=""))
-  PS <- read.table(paste("../out/",psFile,sep=""))
-  ACUogg <- read.table(paste("../out/",species,"_",tax_id,"_ACU",sep=""))
+  TGmap <- read.table(paste("../../results/phylostratigraphy/TGmap_",species,".txt",sep=""))
+  blast <- read.table(paste("../../results/phylostratigraphy/",tax_id,"_",species,"_blastRes.tab",sep=""))
+  PS <- read.table(paste("../../results/phylostratigraphy/",psFile,sep=""))
+  ACUogg <- read.table(paste("../../results/phylostratigraphy/",species,"_",tax_id,"_ACU",sep=""))
   
   mainPS = PS[!duplicated(PS),]
   oggBlast = merge(ACUogg,blast[,c(1,3)],by.x="V1",by.y="V3",all.x=TRUE)
@@ -19,16 +18,16 @@ mergeRes2 <- function(tax_id,species,taxNames,fullName,psFile){
   
   taxNames = c(taxNames,fullName)
   maxPS = length(taxNames)
-  oggGs$ps[oggGs$ps==40]=maxPS
+  oggGs$ps[oggGs$ps==40]=maxPS #Dummy number indicating novel gene
   oggGs$psName = apply(oggGs,1,function(x) taxNames[as.integer(as.character(x[4]))])
   
   return(oggGs)
 }
 #merge endopterygota results
 mergeEndo <- function(species,num){
-  Dmel_END = read.table(paste("../out/",species,"_",num,"_END",sep=""))
-  Dmel_blast =  read.table(paste("../out/",num,"_",species,"_blastRes.tab",sep=""))
-  Dmel_tg = read.table(paste("../out/TGmap_",species,".txt",sep=""))
+  Dmel_END = read.table(paste("../../results/phylostratigraphy/",species,"_",num,"_END",sep=""))
+  Dmel_blast =  read.table(paste("../../results/phylostratigraphy/",num,"_",species,"_blastRes.tab",sep=""))
+  Dmel_tg = read.table(paste("../../results/phylostratigraphy/TGmap_",species,".txt",sep=""))
   
   Dmel_genes = merge(Dmel_blast,Dmel_tg,by.x="V1",by.y="V2")
   Dmel_genes = Dmel_genes[!duplicated(Dmel_genes[,4]),]
@@ -94,4 +93,4 @@ t = t[t==1]
 AB11 = AB11[AB11$Gene.y %in% names(t),]
 ACUogg = AB11[,c(1,2,6)]
 colnames(ACUogg) = c("OGGacu","gene_Mphar","gene_Amel")
-save(ACUogg,ENDogg,Aps,Bps,AllPS,AllPS_sum,file="../out/collectedPhylo.RData")
+save(ACUogg,ENDogg,Aps,Bps,AllPS,AllPS_sum,file="../../results/collectedPhylo.RData")

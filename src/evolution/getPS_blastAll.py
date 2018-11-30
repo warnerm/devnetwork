@@ -24,7 +24,6 @@ main_tax = int(sys.argv[6])
 
 
 #Return tax_id of all blast hits in database
-#Return tax_id of all blast hits in database
 def blastTranscript(transcript,blastDB,seqfile):
 	transcript = transcript.strip()
 	spec = seqfile.replace('_prot.fa','')
@@ -45,6 +44,7 @@ def blastTranscript(transcript,blastDB,seqfile):
 
 	alignments = []
 
+	#Tabulate all alignments
 	for alignment in blast_record.alignments:
 		for hsp in alignment.hsps:
 			if hsp.expect < E_VALUE_THRESH:
@@ -77,6 +77,8 @@ def getMatch(tax):
 	else:
 		connection = sqlite3.connect('../data/taxonomy_extra.db')
 		cursor = connection.cursor()
+
+		#Get the lineae from the SQL database
 		format_str = """SELECT lineage FROM taxonomy_extra WHERE tax_id = {tax_id}"""
 		sql_command = format_str.format(tax_id=int(tax))
 		cursor.execute(sql_command)
@@ -108,23 +110,26 @@ out = open(outfile,'w')
 out.close()
 
 
-# if main_tax == 7227: #Skip the whole process with Drosophila
-# 	with open(outfile,'a') as out:
-# 		out.write('No results for Drosophila melanogaster')
+if main_tax == 7227: #Skip the whole process with Drosophila
+ 	with open(outfile,'a') as out:
+ 		out.write('No results for Drosophila melanogaster')
 
 connection = sqlite3.connect('../data/taxonomy_extra.db')
 cursor = connection.cursor()
 format_str = """SELECT lineage FROM taxonomy_extra WHERE tax_id = {tax_id}"""
 sql_command = format_str.format(tax_id=int(main_tax))
 cursor.execute(sql_command)
+
+#Gets the lineage of the main taxa in question
 lineage = cursor.fetchone()[0]
 connection.close()
 
 max_length = len(re.split('; ',lineage))
 l1 = re.split('; ',lineage)
 
+#Make code to tax_id dictionary
 codes = {}
-with open("../data/chao_codes_edit.txt") as ch:
+with open("../data/codes.txt") as ch:
 	for line in ch:
 		name = re.split('\t',line)[1]
 		tax_id = re.split('\t',line)[2].strip()

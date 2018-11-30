@@ -1,0 +1,65 @@
+#Calculate evolutionary rates (dn/ds) between A. mellifera and A. cerana. Run out of src/evolution
+
+TAX_ID = ["7460","7461"] #NCBI Tax ID for A. mellifera and A. cerana respectively 
+TESTSPEC = ["Amel","Acer"]
+THREADS=20
+
+rule all:
+	input: "../../results/amel_cerana_dnds.txt"
+
+
+#Get name OrthoDB genes for each species for Apis OGGs
+rule getOGGname:
+	input: "../../data/evolution/{tax}.tab"
+	output: "../temp/{tax}_small.tab"
+	shell: """grep "EOG091D" {input} | sort > {output}"""
+
+
+#Will blast against protein sequences from ODB9. *.fs files come from odb9_fasta_metazoa.tgz
+rule makeBlastDB:
+	input: "../../data/evolution/{ref}.fs"
+	output: "../temp/{ref}.phr"
+	shell: "makeblastdb -in {input} -dbtype prot -out ../temp/{wildcards.ref}"
+
+#Perform genome-wide pairwise blast. _prot files are latest protein files from NCBI (Amel version 4.5 and Acer version 2.0)
+rule pairwiseBlast:
+	input: ref="../temp/{ref}.phr",test="../../data/evolution/{test}_prot.fa"
+	output: "../../results/evolution/{ref}_{test}_blastRes.tab"
+	shell: "python2.7 pairwiseBlast.py -s {input[test]} -d {input[ref]} -t {THREADS} -o {output}"
+
+
+#Get Apis OGGs. "EOG091D" is the prefix for all Apis genes
+rule getOGG:
+	input: geneList="../../results/evolution/{ref}_{test}_blastRes.tab", oggList="../../data/evolution/{ref}.tab"
+	output: "../../results/evolution/{test}_{ref}_APIS"
+	shell: "sed 's/gnl[^ ]*//' {input[geneList]} | awk {{'print$2'}} | sort | uniq > ../temp/geneEdit; python2.7 getOGG.py ../temp/geneEdit {output} {THREADS} {input[oggList]} EOG091D"
+
+#Get pairwise results
+rule trimBlast:
+	input: "../../results/evolution/{ref}_{test}_blastRes.tab"
+	output: "../../results/evolution/{ref}_{test}_blastEdit"
+	shell: """cat {input} | sed 's/gnl[^ ]*//' | awk {{'print$1"\t"$2'}} > {output}"""
+
+#Map from protein to cds
+rule getMap:
+	input: "../../data/evolution/{species}.gff"
+	output: "../../data/evolution/TGmap_{species}"
+	shell: """grep "CDS.*protein_id=" {input} | sed 's/.*Parent=//' | sed 's/;.*protein_id=/\t/' | sed 's/;.*//' | sort | uniq > {output}"""
+
+#Tabulate CDS lengths
+rule getLongest:
+	input: "../../data/evolution/{species}.cds.fa"
+	output: "../temp/{species}.lengths.txt"
+	shell: "python2.7 get_longest.py {input} {output}"
+
+#Get 1-1 orthologs (filters for longest CDS from both species)
+rule get11:
+	input: expand("../../results/evolution/{test}_{ref}_APIS",zip,test=TESTSPEC,ref=TAX_ID),expand("../../results/evolution/{ref}_{test}_blastEdit",zip,test=TESTSPEC,ref=TAX_ID),expand("../temp/{test}.lengths.txt",test=TESTSPEC),expand("../../data/evolution/TGmap_{test}",test=TESTSPEC)
+	output: "../data/OGGmap"
+	shell: "Rscript mergeMap.R {input} {output}"
+
+#Calculate pairwise dn/ds
+rule dnds:
+	input: "../../results/evolution/OGGmap",expand("../../data/evolution/{species}_prot.fa",species=TESTSPEC),expand("../../data/evolution/{species}.cds.fa",species=TESTSPEC)
+	output: "../../results/amel_cerana_dnds.txt"
+	shell: "python2.7 OGG_PAML.py {input} {output} {THREADS}"

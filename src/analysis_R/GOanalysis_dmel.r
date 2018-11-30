@@ -34,7 +34,7 @@ DmelOrtho <- function(v,spec){
   return(v1)
 }
 
-#GSEA analysis. Takes in vector of all genes, with a score for social connection strength
+#GSEA analysis. Takes in vector of all genes, with a score for overall bias
 GSEAfunc <- function(d){
   GOdata <- new("topGOdata",
                 description="Simple session",ontology="BP",
@@ -47,13 +47,14 @@ GSEAfunc <- function(d){
   return(allRes) 
 }
 
+#use for p values
 GSEAfunc2 <- function(d){
   GOdata <- new("topGOdata",
                 description="Simple session",ontology="BP",
                 allGenes=d,geneSel=selectConn,
                 annot=annFUN.gene2GO,gene2GO=new)
   
-  #Use scoreOrder = "decreasing" because the higher connection strengths are what we are after
+  #Use scoreOrder = "increasing" because this is for p values
   resultKS <- runTest(GOdata, algorithm = "classic", statistic = "ks",scoreOrder="increasing")
   allRes <- GenTable(GOdata,P=resultKS,numChar=100)
   return(allRes) 
@@ -195,11 +196,23 @@ stageGO <- function(df,col,spec){
 nfAnt= ldply(lapply(c(2:4),function(i) stageGO(antSocRes[[3]],i,"gene_Mphar")))
 nfBee= ldply(lapply(c(2:4),function(i) stageGO(beeSocRes[[3]],i,"gene_Amel")))
 nfGOs = rbind(nfAnt,nfBee)
+colnames(nfAnt)[4] = colnames(nfBee)[4] = "tissue"
 tt <- ttheme_default(colhead=list(fg_params = list(parse=FALSE)),base_size = 16)
 tbl <- tableGrob(nfAnt, rows=NULL, theme=tt)
 ggsave(tbl,file = "~/GitHub/devnetwork/figures/GO_nf_ant.png",height=10,width=14,dpi=300)
 tbl <- tableGrob(nfBee, rows=NULL, theme=tt)
 ggsave(tbl,file = "~/GitHub/devnetwork/figures/GO_nf_bee.png",height=10,width=14,dpi=300)
+
+nfAnt= ldply(lapply(c(2:6),function(i) stageGO(antRes[[3]],i,"gene_Mphar")))
+nfBee= ldply(lapply(c(2:6),function(i) stageGO(beeRes[[3]],i,"gene_Amel")))
+nfGOs = rbind(nfAnt,nfBee)
+colnames(nfAnt)[4] = colnames(nfBee)[4] = "stage/tissue"
+
+tt <- ttheme_default(colhead=list(fg_params = list(parse=FALSE)),base_size = 16)
+tbl <- tableGrob(nfAnt, rows=NULL, theme=tt)
+ggsave(tbl,file = "~/GitHub/devnetwork/figures/GO_caste_ant.png",height=10,width=14,dpi=300)
+tbl <- tableGrob(nfBee, rows=NULL, theme=tt)
+ggsave(tbl,file = "~/GitHub/devnetwork/figures/GO_caste_bee.png",height=10,width=14,dpi=300)
 
 
 

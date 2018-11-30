@@ -4,11 +4,11 @@ import sys
 import os.path
 
 spec_nodes = sys.argv[1]
-node_file = "../data/nodes.dmp"
+node_file = "../../data/evolution/nodes.dmp"
 cellular_node = 131567 #The node that is cellular organism
 all_node = 1 #Viruses will hit this node
 
-connection = sqlite3.connect('../data/taxonomy_extra.db')
+connection = sqlite3.connect('../../data/evolution/taxonomy_extra.db')
 
 cursor = connection.cursor()
 
@@ -44,7 +44,7 @@ def addTax(node):
 			if found == 0: return 0
 	
 	lineage = lineage[:-2] #Remove last semi-colon
-	connection = sqlite3.connect('../data/taxonomy_extra.db')
+	connection = sqlite3.connect('../../data/evolution/taxonomy_extra.db')
 
 	cursor = connection.cursor()
 
@@ -59,7 +59,7 @@ def addTax(node):
 
 #Make code to tax_id dictionary
 codes = {}
-with open("../data/chao_codes_edit.txt") as ch:
+with open("../../data/evolution/codes.txt") as ch:
 	for line in ch:
 		name = re.split('\t',line)[1]
 		tax_id = re.split('\t',line)[2].strip()

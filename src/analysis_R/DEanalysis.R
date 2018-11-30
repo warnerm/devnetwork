@@ -278,7 +278,7 @@ beeSocRes <- parseDE(beeSocial,"forager","nurse",0.1)
 DevTool2 <- function(factor,data){
   f = factor[factor$stage != 8 &factor$stage!=7,]
   design <- model.matrix(~stage+colony+caste,data=droplevels(f))
-  devGenes <- EdgeR(data[,colnames(data) %in% f$sample],design,2:7)
+  devGenes <- EdgeR(data[,colnames(data) %in% f$sample],design,2:6)
   return(devGenes)
 }
 
@@ -286,3 +286,67 @@ antDevel2 = DevTool2(factorA,ant)
 beeDevel2 = DevTool2(factorB,bee)
 
 save(antDevel2,beeDevel2,beeTests,beeTests_oneLarv,antRes,beeRes,antRes_allstage,beeRes_allstage,antSocRes,beeSocRes,antTests,antTests_oneLarv,ant_sexDE,bee_sexDE,ant_VM,bee_VM,beeSocial,antSocial,file = "results/DEtests.RData")
+
+load("results/collectedPhylo.RData")
+antA = ant
+beeA = bee
+antA$Gene = rownames(antA)
+beeA$Gene = rownames(beeA)
+antA = merge(antA,ACUogg,by.x="Gene",by.y="gene_Mphar")
+
+oggE = merge(antA,beeA,by.x="gene_Amel",by.y="Gene")
+rownames(oggE) = oggE$OGGacu
+oggE = oggE[,-c(1,2,93)]
+factorA$species = "ant"
+factorB$species = "bee"
+allF = rbind(factorA,factorB)
+allF$species = as.factor(allF$species)
+
+allF = droplevels(allF[(allF$caste=="queen" | allF$caste == "worker") & allF$stage!=1 & allF$stage != 2,])
+
+oggDE <- function(f,d,lev){
+  fac = f[f$tissue == lev,]
+  d = d[,colnames(d) %in% fac$sample]
+  design <- model.matrix(~caste+species,data = fac)
+  out <- EdgeR(d,design,2)
+  return(out)
+}
+
+tabDE <- function(out){
+  return(data.frame(Nqueen = sum(out$FDR < 0.1 & out$logFC < 0),Nworker = sum(out$FDR < 0.1 & out$logFC > 0)))
+}
+
+oggDE_noInt <- function(f,d,lev){
+  fac = f[f$tissue == lev,]
+  d = d[,colnames(d) %in% fac$sample]
+  design <- model.matrix(~caste*species,data = fac)
+  out <- EdgeR(d,design,4)
+  d = d[!rownames(d) %in% rownames(out)[]]
+  return(out)
+}
+
+specDE <- lapply(levels(allF$tissue),function(x) oggDE(allF,oggE,x))
+sDE <- ldply(lapply(specDE,tabDE))
+sDE$Tissue = c("larva","pupa","head","thorax","abdomen")
+
+tt <- ttheme_default(colhead=list(fg_params = list(parse=FALSE)),base_size = 16)
+tbl <- tableGrob(sDE, rows=NULL, theme=tt)
+ggsave(tbl,file = "figures/BitaoNum.png",height=4,width=4,dpi=300)
+
+Ap2 = merge(Aps,Bps,by="OGGacu")
+
+antD = rownames(antDevel2)[antDevel2$FDR < 0.1]
+beeD = rownames(beeDevel2)[beeDevel2$FDR < 0.1]
+
+ACUogg$beeD = ACUogg$antD = 0
+ACUogg$beeD[ACUogg$gene_Amel %in% beeD] = 1
+ACUogg$antD[ACUogg$gene_Mphar %in% antD] = 1
+
+a = as.data.frame(rbind(c(length(antD),sum(ACUogg$antD),sum(ACUogg$antD & ACUogg$beeD)),
+          c(length(beeD),sum(ACUogg$beeD),sum(ACUogg$antD & ACUogg$beeD))))
+
+a$species = c("ant","bee")
+colnames(a)[1:3] = c("develTotal","devel_withOGG","devel_bothSpecies")
+tbl <- tableGrob(a, rows=NULL, theme=tt)
+ggsave(tbl,file = "figures/DevelNum.png",height=4,width=8,dpi=300)
+

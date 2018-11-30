@@ -2,13 +2,13 @@
 #SBATCH -p compute # partition (queue)
 #SBATCH --export=ALL
 #SBATCH -t 10-00:00
-#SBATCH -n 40
+#SBATCH -n 20
 
 import numpy as np, sys, re, getopt, pandas as pd
 import subprocess
 from subprocess import call
 from joblib import Parallel, delayed
-from Bio.Blast.Applications import NcbitblastxCommandline
+from Bio.Blast.Applications import NcbiblastpCommandline
 from Bio import SeqIO
 from Bio.Blast import NCBIXML
 
@@ -30,21 +30,22 @@ def InOut(argv):
 	return seqfile,dbfile,threads,outfile
 
 def callProc(gene,seqfile,dbfile,outfile):
+	spec = seqfile.replace('_prot.fa','')
 
 	#Make fasta file of the individual protein
 	seqiter = SeqIO.parse(open(seqfile),'fasta')
 	SeqIO.write((seq for seq in seqiter if seq.id in gene), "temp"+gene+".fa", "fasta")
 
-	blastn_cline = NcbitblastxCommandline(query="temp"+gene+".fa",db=dbfile,evalue=1e-10,
+	blastp_cline = NcbiblastpCommandline(query="temp"+gene+".fa",db=dbfile,evalue=1e-10,
 											outfmt=5,out="blast"+gene+".xml")
 
-	stdout, stderr = blastn_cline()
+	stdout, stderr = blastp_cline()
 
 	result_handle = open("blast"+gene+".xml")
-
 	blast_record = NCBIXML.read(result_handle)
 	E_VALUE_THRESH = 1e-10
 
+	#Get first match
 	for alignment in blast_record.alignments:
 		for hsp in alignment.hsps:
 			if hsp.expect < E_VALUE_THRESH:
@@ -53,9 +54,12 @@ def callProc(gene,seqfile,dbfile,outfile):
 				break
 		break
 
+	#Remove temporary files
+	call(["rm","temp"+gene+".fa","blast"+gene+".xml"])
 
 def main(argv):
 	seqfile,dbfile,threads,outfile = InOut(argv)
+	dbfile = dbfile.replace('.phr','')
 	seq_IDs = []
 	out = open(outfile,'w')
 	out.close()

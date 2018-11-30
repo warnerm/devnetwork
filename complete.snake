@@ -1,16 +1,26 @@
 #This script compiles all analysis necessary to make figures
 
-#rule all: 
+rule all: 
+	input: "results/mphar_sinv_dnds.txt",
+			"results/amel_cerana_dnds.txt",
+			"results/antConnectivity.csv",
+			"results/beeConnectivity.csv",
+			"results/antPlaidGenes.csv",
+			"results/beePlaidGenes.csv",
+			"results/PlaidResults.RData",
+			"results/tau_results.RData",
+			"results/dmel_sexGenes.csv",
+			"results/collectedPhylo.RData",
+			"results/DEtests.RData"
 	
 #perform phylostratigraphy, get orthologs
-rule ps_calls:
+rule phylostrat:
 	output: "results/collectedPhylo.RData"
-	shell: """cd phylostratigraphy/src; snakemake -s snakefile_blastPS; cd ../../; \
-			mv phylostratigraphy/out/collectedPhylo.RData {output}"""
+	shell: """cd src/evolution; snakemake -s snakefile_blastPS"""
 
 #Perform DE analysis for each species
 rule DE_analysis:
-	input: "ants.counts_edit.txt","bees.counts_edit.txt"
+	input: "data/ants.counts_edit.txt","data/bees.counts_edit.txt"
 	output: "results/DEtests.RData"
 	shell" "Rscript src/analysis_R/DEanalysis.R"
 
@@ -54,4 +64,17 @@ rule collect_plaid:
 rule calcConn:
 	output: "results/antConnectivity.csv","results/beeConnectivity.csv"
 	shell: "Rscript src/analysis_R/getConn.R"
+
+#Apis evolution
+rule apisEvol:
+	output: "results/amel_cerana_dnds.txt"
+	shell: "cd src/evolution; snakemake -s snakefile_dnds_amel; cd ../../"
+
+
+#Mphar evolution
+rule apisEvol:
+	output: "results/mphar_sinv_dnds.txt"
+	shell: "cd src/evolution; snakemake -s snakefile_dnds_mphar; cd ../../"
+
+
 
