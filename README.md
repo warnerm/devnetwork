@@ -1,4 +1,5 @@
 # devnetwork
+This repository contains all analyses for Warner et al. 2019, Nature Communications. 
 
 Prior to running scripts dealing with figures (src/analysis_R/submission_figures.R), multiple separate analyses need to be done**:
   1) differential expression (src/analysis_R/DEanalysis.R)
