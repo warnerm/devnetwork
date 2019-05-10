@@ -1,5 +1,10 @@
 # devnetwork
-This repository contains all analyses for Warner et al. 2019, Nature Communications. 
+This repository contains all analyses for the following publication:
+Warner, M.R., Qiu, L., Holmes, M.J., Mikheyev, A.S. & Linksvayer, T.A. 2019. The convergent 
+evolution of caste in ants and honey bees is based on a shared core of ancient reproductive 
+genes and many plastic genes. In press, Nature Communications. Preprint: https://doi.org/10.1101/454645
+
+
 
 Prior to running scripts dealing with figures (src/analysis_R/submission_figures.R), multiple separate analyses need to be done**:
   1) differential expression (src/analysis_R/DEanalysis.R)
